@@ -30,3 +30,6 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# AGENTIC_LOOP worktrees (one per Code-agent ticket)
+.worktrees/
