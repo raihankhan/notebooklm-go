@@ -84,3 +84,16 @@ packages:
   # imports so every package can import it.
   - path: github.com/raihankhan/notebooklm-go/internal/paths
     mode: internal
+
+  # `internal/auth/storage` is the storage_state.json read/write layer
+  # (T-P2-2). It owns the lossless round-trip and the Python-CLI
+  # import normalizers (expirationDate → expires, sameSite case
+  # forms, bare cookie arrays, origins dropped, the in-band
+  # notebooklm.account namespace, and the legacy context.json
+  # promotion). The package is mode=internal: stdlib +
+  # internal/web/wire (the single JSON adapter) and nothing else —
+  # third-party dependencies would not survive an audit on a credential
+  # file, and the cookie-jar package already imports nothing
+  # third-party so storage stays symmetric.
+  - path: github.com/raihankhan/notebooklm-go/internal/auth/storage
+    mode: internal

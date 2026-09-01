@@ -1,0 +1,8 @@
+{
+  "notebook_id": "fake-notebook-id-not-a-real-resource",
+  "conversation_id": null,
+  "account": {
+    "authuser": 2,
+    "email": "legacy@example.invalid"
+  }
+}
