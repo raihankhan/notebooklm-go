@@ -37,6 +37,15 @@ packages:
   - path: github.com/raihankhan/notebooklm-go/internal/web/wire
     mode: stdlib
 
+  # `internal/web/policy` is the IdempotencyRegistry — the gate the transport
+  # uses to decide whether a batchexecute RPC is replay-safe. It imports
+  # `internal/web/wire` (for the Method table) and stdlib, and nothing else;
+  # misclassification would either retry a destructive call (duplicate
+  # side effects) or refuse to retry a safe one (visible flake), so this
+  # package must remain free of app-layer and transport-layer imports.
+  - path: github.com/raihankhan/notebooklm-go/internal/web/policy
+    mode: internal
+
   # `internal/redact` is the credential-masking primitive (T-P0-3). It is
   # leaf by policy: stdlib only, no third-party imports, no module-internal
   # imports. Everything that needs to mask a credential routes through it.
