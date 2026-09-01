@@ -97,3 +97,17 @@ packages:
   # third-party so storage stays symmetric.
   - path: github.com/raihankhan/notebooklm-go/internal/auth/storage
     mode: internal
+
+  # `internal/auth/policy` is the cookie-domain allowlist, the
+  # MinimumRequiredCookies set, the Tier 2 secondary-binding matrix,
+  # and the typed Validate entry point the refresh ladder in Phase 4
+  # switches on (T-P2-3). The package is mode=internal: stdlib +
+  # internal/redact (so the diagnostic messages that name cookie names
+  # route through the credential primitive) + internal/auth/cookiejar
+  # (for the Jar type passed to Validate). No third-party dependencies;
+  # the cookie-jar package stays the only credential-aware data
+  # structure policy talks to, and every other credential surface
+  # (storage, browser, master-token) goes through cookie-jar, not
+  # through policy.
+  - path: github.com/raihankhan/notebooklm-go/internal/auth/policy
+    mode: internal
