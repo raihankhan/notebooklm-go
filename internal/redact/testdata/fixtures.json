@@ -1,0 +1,16 @@
+[
+  {"family": "quoted-json", "token": "SNlM0e", "input": "\"SNlM0e\":\"abc123\"", "must_not_contain": "abc123"},
+  {"family": "quoted-json", "token": "FdrFJe", "input": "\"FdrFJe\":\"xyz789\"", "must_not_contain": "xyz789"},
+  {"family": "quoted-json", "token": "SNlM0e", "input": "\\\"SNlM0e\\\":\\\"escaped\\\"", "must_not_contain": "escaped"},
+  {"family": "html-escaped-json", "token": "SNlM0e", "input": "&quot;SNlM0e&quot;:&quot;h1&quot;", "must_not_contain": "h1"},
+  {"family": "html-escaped-json", "token": "FdrFJe", "input": "&quot;FdrFJe&quot;:&quot;h2&quot;", "must_not_contain": "h2"},
+  {"family": "form-prose", "token": "SNlM0e", "input": "SNlM0e=formvalue1&FdrFJe=othervalue", "must_not_contain": "formvalue1"},
+  {"family": "form-prose", "token": "FdrFJe", "input": "FdrFJe=formvalue2&y=1", "must_not_contain": "formvalue2"},
+  {"family": "bare-token", "token": "SNlM0e", "input": "SNlM0e by itself in prose", "must_not_contain": "SNlM0e"},
+  {"family": "bare-token", "token": "FdrFJe", "input": "FdrFJe by itself in prose", "must_not_contain": "FdrFJe"},
+  {"family": "url-query", "token": "secret", "input": "https://example.com/path?secret=hunter2&y=1", "must_not_contain": "hunter2"},
+  {"family": "url-query", "token": "secret", "input": "https://example.com/x?a=1&secret=midvalue&z=2", "must_not_contain": "midvalue"},
+  {"family": "url-semicolon", "token": "session", "input": "prefix;session=abc123;tail=1", "must_not_contain": "abc123"},
+  {"family": "cookie-header", "token": "Cookie", "input": "Cookie: __Secure-1PSID=abc; __Secure-1PSIDTS=xyz\n", "must_not_contain": "__Secure-1PSID=abc"},
+  {"family": "authorization-header", "token": "Authorization", "input": "Authorization: Bearer ya29.tokenvalue\n", "must_not_contain": "ya29.tokenvalue"}
+]

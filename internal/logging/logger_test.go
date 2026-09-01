@@ -12,8 +12,12 @@ import (
 )
 
 // maskRedactor is a test-only redactor that replaces any occurrence of
-// `secret` in attribute bytes with `REDACTED`. It lives in _test.go so it
-// can never leak into production binaries.
+// `from` in attribute bytes with `to`. It exists so tests that need
+// to verify the swap-in / swap-out seam (WithRedactor) can use a
+// stable, non-credential-shape token that the default
+// internal/redact implementation will never match. Using a fake
+// "TOKEN" / "PAYLOAD" string keeps the swap tests independent of the
+// real redactor's coverage.
 type maskRedactor struct {
 	from string
 	to   string
@@ -24,23 +28,22 @@ func (m maskRedactor) Apply(b []byte) []byte {
 }
 
 // TestRedaction_String exercises the on-wire contract for the most common
-// case: a string attribute carrying a secret token must be masked.
+// case: a string attribute carrying a real Google credential token
+// must be masked by the default redactor (which is internal/redact
+// after T-P0-3 lands).
 func TestRedaction_String(t *testing.T) {
 	t.Parallel()
-
-	cleanup := WithRedactor(maskRedactor{from: "SECRET-TOKEN", to: "REDACTED"})
-	defer cleanup()
 
 	var buf bytes.Buffer
 	log := New(&buf, OptionLevel(slog.LevelDebug))
 
-	log.Info("hello", slog.String("token", "SECRET-TOKEN"))
+	log.Info("hello", slog.String("token", "SNlM0e"))
 
 	out := buf.String()
-	if strings.Contains(out, "SECRET-TOKEN") {
-		t.Fatalf("secret leaked on wire:\n%s", out)
+	if strings.Contains(out, "SNlM0e") {
+		t.Fatalf("credential token leaked on wire:\n%s", out)
 	}
-	if !strings.Contains(out, "REDACTED") {
+	if !strings.Contains(out, "[REDACTED]") {
 		t.Fatalf("masked token missing from output:\n%s", out)
 	}
 }
@@ -51,22 +54,19 @@ func TestRedaction_String(t *testing.T) {
 func TestRedaction_Struct(t *testing.T) {
 	t.Parallel()
 
-	cleanup := WithRedactor(maskRedactor{from: "SECRET-XXX", to: "MASKED"})
-	defer cleanup()
-
 	var buf bytes.Buffer
 	log := New(&buf, OptionLevel(slog.LevelDebug))
 
 	log.Info("payload", slog.Any("data", struct {
 		User string
 		Tok  string
-	}{User: "alice", Tok: "SECRET-XXX"}))
+	}{User: "alice", Tok: `{"FdrFJe":"abc123"}`}))
 
 	out := buf.String()
-	if strings.Contains(out, "SECRET-XXX") {
-		t.Fatalf("secret leaked on wire:\n%s", out)
+	if strings.Contains(out, "FdrFJe") {
+		t.Fatalf("credential token leaked on wire:\n%s", out)
 	}
-	if !strings.Contains(out, "MASKED") {
+	if !strings.Contains(out, "[REDACTED]") {
 		t.Fatalf("masked token missing from output:\n%s", out)
 	}
 	// Non-secret fields must survive the redactor unchanged.
@@ -257,17 +257,23 @@ func TestOptionVerbosity_ZeroLeavesLevelAlone(t *testing.T) {
 	}
 }
 
-// TestReplaceAttr_NoopRedactorIsDefault confirms that without WithRedactor
-// the values pass through unchanged.
-func TestReplaceAttr_NoopRedactorIsDefault(t *testing.T) {
+// TestReplaceAttr_DefaultRedactorIsRealRedact confirms that the
+// default redactor (after T-P0-3) is the real internal/redact.Apply.
+// We probe with a benign value that no regex family matches so the
+// byte survives the pipeline unchanged — if the default were still
+// the T-P0-2 no-op stub the test would also pass, but the matching
+// TestRedaction_String above proves real redaction fires when a
+// credential token is present.
+func TestReplaceAttr_DefaultRedactorIsRealRedact(t *testing.T) {
 	t.Setenv("NOTEBOOKLM_LOG_LEVEL", "")
 
 	var buf bytes.Buffer
 	log := New(&buf, OptionLevel(slog.LevelDebug))
-	log.Info("plain", slog.String("k", "SECRET-NOPE"))
+	log.Info("plain", slog.String("k", "harmless-text"))
 
-	if !strings.Contains(buf.String(), "SECRET-NOPE") {
-		t.Fatalf("default noop redactor should pass through:\n%s", buf.String())
+	if !strings.Contains(buf.String(), "harmless-text") {
+		t.Fatalf("benign value should pass through the default redactor:\n%s",
+			buf.String())
 	}
 }
 

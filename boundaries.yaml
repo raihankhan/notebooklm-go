@@ -36,3 +36,16 @@ packages:
   # else must go through wire.Marshal / wire.Unmarshal.
   - path: github.com/raihankhan/notebooklm-go/internal/web/wire
     mode: stdlib
+
+  # `internal/redact` is the credential-masking primitive (T-P0-3). It is
+  # leaf by policy: stdlib only, no third-party imports, no module-internal
+  # imports. Everything that needs to mask a credential routes through it.
+  - path: github.com/raihankhan/notebooklm-go/internal/redact
+    mode: stdlib
+
+  # `internal/logging` is the stderr-only slog handler (T-P0-2). It may
+  # import the redact primitive but nothing else inside `internal/` —
+  # loggers are intentionally cheap to embed and must not depend on the
+  # application-layer packages.
+  - path: github.com/raihankhan/notebooklm-go/internal/logging
+    mode: internal
