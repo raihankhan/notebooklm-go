@@ -26,9 +26,14 @@ jobs:
           check-latest: true
 
       - name: setup golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v8
         with:
-          version: latest
+          # Pin to v2.5.0: the v1.x line (max v1.64.8) is built with the Go 1.24
+          # toolchain and refuses to parse a go.mod declaring `go 1.25`. The
+          # .golangci-lint v2 line requires golangci-lint-action v7+, so we
+          # bump from v6 to v8 (the current major that documents v2 support).
+          # .golangci.yml is already in v2 config format.
+          version: v2.5.0
 
       - name: go env
         run: go env GOOS GOARCH
@@ -58,9 +63,14 @@ jobs:
           check-latest: true
 
       - name: setup golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v8
         with:
-          version: latest
+          # Pin to v2.5.0: the v1.x line (max v1.64.8) is built with the Go 1.24
+          # toolchain and refuses to parse a go.mod declaring `go 1.25`. The
+          # .golangci-lint v2 line requires golangci-lint-action v7+, so we
+          # bump from v6 to v8 (the current major that documents v2 support).
+          # .golangci.yml is already in v2 config format.
+          version: v2.5.0
 
       - name: check
         run: make check
