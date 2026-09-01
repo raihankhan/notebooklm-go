@@ -1,0 +1,11 @@
+[["wrb.fr","A","ok1",null,null,null,"generic"]]
+[["wrb.fr","B","ok2",null,null,null,"generic"]]
+[["wrb.fr","C","ok3",null,null,null,"generic"]]
+[["wrb.fr","D","ok4",null,null,null,"generic"]]
+[["wrb.fr","E","ok5",null,null,null,"generic"]]
+[["wrb.fr","F","ok6",null,null,null,"generic"]]
+[["wrb.fr","G","ok7",null,null,null,"generic"]]
+[["wrb.fr","H","ok8",null,null,null,"generic"]]
+[["wrb.fr","I","ok9",null,null,null,"generic"]]
+[not valid json
+[["wrb.fr","J","ok10",null,null,null,"generic"]]
