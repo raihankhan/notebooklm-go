@@ -311,7 +311,7 @@ func TestEncodeRequest_GoldenBytesMatch(t *testing.T) {
 				t.Fatalf("decode params in %s: %v", path, err)
 			}
 		}
-		got, err := EncodeRequest(fixture.Method, params, fixture.RPCID)
+		got, err := EncodeRequest(Method(fixture.Method), params, fixture.RPCID)
 		if err != nil {
 			t.Fatalf("EncodeRequest %s: %v", name, err)
 		}

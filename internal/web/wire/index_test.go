@@ -563,3 +563,48 @@ func TestShapeDriftError_UnwrapReturnsErrDecoding(t *testing.T) {
 		t.Fatalf("ShapeDriftError does not unwrap to ErrDecoding")
 	}
 }
+
+func TestOptInt_PresentGoInt(t *testing.T) {
+	// Direct go int (not json.Number) should still return.
+	v := map[string]any{"id": 7}
+	i, ok := OptInt(v, "id")
+	if !ok {
+		t.Fatalf("OptInt(go int) ok = false, want true")
+	}
+	if i != 7 {
+		t.Fatalf("OptInt(go int) = %d, want 7", i)
+	}
+}
+
+func TestOptInt_PresentGoInt64(t *testing.T) {
+	v := map[string]any{"id": int64(99)}
+	i, ok := OptInt(v, "id")
+	if !ok {
+		t.Fatalf("OptInt(go int64) ok = false, want true")
+	}
+	if i != 99 {
+		t.Fatalf("OptInt(go int64) = %d, want 99", i)
+	}
+}
+
+func TestOptInt_PresentStringIsNotInt(t *testing.T) {
+	v := map[string]any{"id": "42"}
+	i, ok := OptInt(v, "id")
+	if ok {
+		t.Fatalf("OptInt(string) ok = true, want false")
+	}
+	if i != 0 {
+		t.Fatalf("OptInt(string) = %d, want 0", i)
+	}
+}
+
+func TestOptInt_PresentFloatIsNotInt(t *testing.T) {
+	v := map[string]any{"id": 1.5}
+	i, ok := OptInt(v, "id")
+	if ok {
+		t.Fatalf("OptInt(float) ok = true, want false")
+	}
+	if i != 0 {
+		t.Fatalf("OptInt(float) = %d, want 0", i)
+	}
+}

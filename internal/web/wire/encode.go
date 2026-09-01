@@ -14,21 +14,12 @@
 // mirrors that byte-for-byte. The percent encoder is wire.escapeAll, which
 // matches Python's quote(s, safe="") (space → %20, '/' → %2F, etc.).
 //
-// This file does NOT depend on the wire.Method type — see the stub alias
-// below. T-P1-2 lands the canonical Method type on master; that file will
-// declare `type Method string`, and once T-P1-3 rebases onto it, the stub
-// here drops and the file uses Method directly. The stub is documented in
-// the ticket body and explicitly noted in the commit message.
+// This file uses the canonical wire.Method type, declared in methods.go
+// (T-P1-2). When this branch was first written, the stub alias lived here;
+// it was removed in the post-merge rebase once T-P1-2's named type landed.
 package wire
 
 import "strings"
-
-// Method is the stub alias for the canonical Method type. T-P1-2 owns the
-// canonical `Method` type in methods.go. This alias exists so this file
-// builds in isolation. Once T-P1-2's branch merges and T-P1-3 rebases,
-// delete this alias — the canonical type is in methods.go.
-// (stub Method alias will be removed when T-P1-2 lands)
-type Method = string
 
 // EncodeRequest produces the triple-nested positional body the
 // batchexecute endpoint consumes:
