@@ -37,7 +37,7 @@ vet: ## Run go vet
 lint: ## Run golangci-lint (installed by CI)
 	$(GOLANGCI_LINT) run
 
-test: ## Run unit tests
+test: ## Run unit tests with the race detector
 	$(GO) test -race ./...
 
 test-e2e: ## Run end-to-end tests (stubs until later phase)
@@ -46,8 +46,9 @@ test-e2e: ## Run end-to-end tests (stubs until later phase)
 cover: ## Produce cover.out coverage profile
 	$(GO) test -coverprofile=cover.out ./...
 
-boundarycheck: ## Run boundary verifier (stubbed until T-P0-4)
-	@echo "boundarycheck not yet implemented (lands in T-P0-4)"
+boundarycheck: ## Verify every package respects docs/AGENTS.md rule 5
+	@echo "  CHECK  boundary rules"
+	@$(GO) run ./internal/tools/boundarycheck
 
 clean: ## Remove build artifacts
 	rm -f cover.out

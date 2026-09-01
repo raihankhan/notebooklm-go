@@ -1,0 +1,38 @@
+# boundaries.yaml — declarative import-boundary rules for notebooklm-go.
+#
+# This file mirrors docs/AGENTS.md rule 5. The `internal/tools/boundarycheck`
+# tool reads it on every `make check` and rejects any import that violates a
+# row below.
+#
+# Schema:
+#   schema_version: integer; bump when the field set changes.
+#   packages: list of rule entries, one per governed package.
+#     path:  fully-qualified Go import path of the governed package.
+#     mode:  "internal" — every import path must start with the module's
+#                          own root (i.e. only sibling internal/* packages).
+#            "stdlib"    — every import must be a Go standard-library
+#                          package; nothing else is allowed.
+#
+# A package that does not yet exist on disk is silently skipped (we cannot
+# lint what has not been written). This keeps `make boundarycheck` green
+# during the early phases when only some packages have been scaffolded.
+schema_version: 1
+
+packages:
+  - path: github.com/raihankhan/notebooklm-go/internal/app
+    mode: internal
+
+  - path: github.com/raihankhan/notebooklm-go/internal/cli
+    mode: internal
+
+  - path: github.com/raihankhan/notebooklm-go/internal/mcpsrv
+    mode: internal
+
+  - path: github.com/raihankhan/notebooklm-go/internal/restsrv
+    mode: internal
+
+  # `internal/web/wire` is the single JSON adapter — docs/AGENTS.md rule 3
+  # permits exactly one importer of encoding/json, and this is it. Everything
+  # else must go through wire.Marshal / wire.Unmarshal.
+  - path: github.com/raihankhan/notebooklm-go/internal/web/wire
+    mode: stdlib
