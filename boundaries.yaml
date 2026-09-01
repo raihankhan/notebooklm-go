@@ -111,3 +111,15 @@ packages:
   # through policy.
   - path: github.com/raihankhan/notebooklm-go/internal/auth/policy
     mode: internal
+
+  # `internal/runtime` is the Lifecycle, Supervisor, Metrics, and
+  # deadline.Budget primitives (T-P3-1) used by every later
+  # transport call. The package is mode=stdlib: only Go standard
+  # library packages — no third-party dependencies (a deadlock
+  # here stops the whole binary, so the dependency surface is
+  # deliberately the smallest possible) and no module-internal
+  # imports. Credential material does not appear in this package
+  # at all; the redaction primitive stays out of the import graph
+  # so a redact bug cannot cascade into the lifecycle primitive.
+  - path: github.com/raihankhan/notebooklm-go/internal/runtime
+    mode: stdlib
