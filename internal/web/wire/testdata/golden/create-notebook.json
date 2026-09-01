@@ -1,0 +1,6 @@
+{
+  "method": "rpc",
+  "rpc_id": "CCqFvf",
+  "params": [],
+  "expected": "[[\"rpc\",[],\"CCqFvf\",null,null]]"
+}

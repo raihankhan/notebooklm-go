@@ -1,0 +1,2 @@
+[["wrb.fr","X","a",null,null,null,"generic"]]
+[["wrb.fr","Y","b",null,null,null,"generic"]]

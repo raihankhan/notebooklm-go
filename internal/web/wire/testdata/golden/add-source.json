@@ -1,0 +1,6 @@
+{
+  "method": "rpc",
+  "rpc_id": "izAoDd",
+  "params": {"url": "https://example.com", "title": "Example"},
+  "expected": "[[\"rpc\",{\"title\":\"Example\",\"url\":\"https://example.com\"},\"izAoDd\",null,null]]"
+}
