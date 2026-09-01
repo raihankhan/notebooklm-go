@@ -6,10 +6,10 @@ Stand up the `notebooklm-go` repository skeleton, the `internal/web/wire` + `int
 ## Tickets
 
 ### Phase 0 — Repository foundation
-Phase issue: #<phase-issue>
+Phase issue: #3
 
 #### T-P0-1: scaffold — module, Makefile, CI matrix, `.gitignore`
-- **Parent phase issue:** #<phase-issue>
+- **Parent phase issue:** #3
 - **One-line description:** Create `github.com/raihankhan/notebooklm-go` Go 1.25 module with the full `Makefile` target set, the `.golangci.yml` lint config, the 6-platform CI matrix, and a `.gitignore` that includes `.worktrees/`.
 - **Files touched:** `go.mod`, `Makefile`, `.golangci.yml`, `.github/workflows/ci.yml`, `.gitignore`, root `AGENTS.md`, root `CLAUDE.md`, `README.md`, `cmd/notebooklm/.gitkeep` (so `go build ./...` succeeds before any code lands).
 - **Acceptance criteria:**
@@ -26,7 +26,7 @@ Phase issue: #<phase-issue>
 - **Suggested PR title:** `scaffold: bootstrap module, Makefile, CI matrix, and worktree gitignore`
 
 #### T-P0-2: buildinfo + logging — version injection and `slog` handler with redaction hook
-- **Parent phase issue:** #<phase-issue>
+- **Parent phase issue:** #3
 - **One-line description:** Land `internal/buildinfo` (version/commit/date via `-ldflags`) and `internal/logging` (stderr-only `log/slog` handler, level from `NOTEBOOKLM_LOG_LEVEL` / `-v`, context-bound request-id correlation, and a `slog.ReplaceAttr` hook that routes every attribute through `internal/redact`).
 - **Files touched:** `internal/buildinfo/buildinfo.go`, `internal/buildinfo/buildinfo_test.go`, `internal/logging/logger.go`, `internal/logging/handler.go`, `internal/logging/redact_hook.go`, `internal/logging/logger_test.go`; `Makefile` updated to pass `-ldflags` to `make build`.
 - **Acceptance criteria:**
@@ -43,7 +43,7 @@ Phase issue: #<phase-issue>
 - **Suggested PR title:** `logging: add internal/buildinfo and stderr-only slog handler with redaction hook`
 
 #### T-P0-3: redact — port `_logging.py` regex families and URL redactors
-- **Parent phase issue:** #<phase-issue>
+- **Parent phase issue:** #3
 - **One-line description:** Port the four credential-regex families from `notebooklm-py/_logging.py` (quoted JSON, HTML-escaped JSON, form/prose, bare tokens) plus URL redactors for `?secret=`, `;session=`, cookies, and `Authorization` headers into `internal/redact`, satisfying Phase 0's redaction table test.
 - **Files touched:** `internal/redact/redact.go`, `internal/redact/redact_test.go`, `internal/redact/testdata/fixtures.json` (the 12+ fixture values referenced in the test).
 - **Acceptance criteria:**
@@ -59,7 +59,7 @@ Phase issue: #<phase-issue>
 - **Suggested PR title:** `wire: port credential redaction regexes from notebooklm-py/_logging`
 
 #### T-P0-4: boundarycheck — declarative import-graph linter with planted-failure test
-- **Parent phase issue:** #<phase-issue>
+- **Parent phase issue:** #3
 - **One-line description:** Land `internal/tools/boundarycheck` reading a declarative `boundaries.yaml` that mirrors AGENTS.md rule 5 (with F3 rows added in Phase 14), and a CI test that proves a deliberately planted bad import is rejected.
 - **Files touched:** `internal/tools/boundarycheck/main.go`, `internal/tools/boundarycheck/main_test.go`, `boundaries.yaml`, `Makefile` (wire `boundarycheck` target to `go run ./internal/tools/boundarycheck`).
 - **Acceptance criteria:**
@@ -77,12 +77,12 @@ Phase issue: #<phase-issue>
 ---
 
 ### Phase 1 — The wire layer
-Phase issue: #<phase-issue>
+Phase issue: #4
 
 > Phase 1 is the highest-leverage phase in the whole roadmap. Every later phase assumes the byte-level fidelity of these packages. Tickets are sequenced to lock the encoding primitive first (T-P1-1), then the JSON/encoding-error surface that everything in `internal/web` will pass through, then the per-method decode/encode work, then the policy registry.
 
 #### T-P1-1: wire/json + wire/escape — `Marshal`, `Unmarshal`, `escapeAll`
-- **Parent phase issue:** #<phase-issue>
+- **Parent phase issue:** #4
 - **One-line description:** Land `internal/web/wire/json.go` with `Marshal` (`SetEscapeHTML(false)`, newline-trimmed) and `Unmarshal` (`UseNumber()`), and `internal/web/wire/escape.go` with `escapeAll` (Python `quote(s, safe="")`-equivalent; space encodes as `%20`, never `+`). These are the only `encoding/json` importers in the module.
 - **Files touched:** `internal/web/wire/json.go`, `internal/web/wire/json_test.go`, `internal/web/wire/escape.go`, `internal/web/wire/escape_test.go`, `internal/web/wire/doc.go` (notes the "only encoder/decoder" contract from AGENTS.md rule 3), `boundaries.yaml` (add `internal/web/wire` row — stdlib-only).
 - **Acceptance criteria:**
@@ -99,7 +99,7 @@ Phase issue: #<phase-issue>
 - **Suggested PR title:** `wire: add internal/web/wire json and escapeAll primitives`
 
 #### T-P1-2: wire/methods + wire/urls + wire/status — method table, allowlist, gRPC label layer
-- **Parent phase issue:** #<phase-issue>
+- **Parent phase issue:** #4
 - **One-line description:** Land `internal/web/wire/methods.go` (full `Method` table from doc 03, with `ResolveID` honoring `NOTEBOOKLM_RPC_OVERRIDES`), `internal/web/wire/urls.go` (endpoint builders + the three-host base-URL allowlist), and `internal/web/wire/status.go` (`GrpcStatusCode` labels, `SanitizeStatusMessage` with the 300-char cap, `UserDisplayableError` depth-capped marker scan, and the account-routing hint text).
 - **Files touched:** `internal/web/wire/methods.go`, `internal/web/wire/methods_test.go`, `internal/web/wire/urls.go`, `internal/web/wire/urls_test.go`, `internal/web/wire/status.go`, `internal/web/wire/status_test.go`, `internal/web/wire/testdata/method_overrides.json` (override-fixture for `ResolveID`).
 - **Acceptance criteria:**
@@ -116,7 +116,7 @@ Phase issue: #<phase-issue>
 - **Suggested PR title:** `wire: port Method table, host allowlist, and gRPC status layer from notebooklm-py`
 
 #### T-P1-3: wire/encode + wire/decode + wire/index — encode/decode with golden bytes and chunked-parser fixtures
-- **Parent phase issue:** #<phase-issue>
+- **Parent phase issue:** #4
 - **One-line description:** Land `internal/web/wire/encode.go` (`EncodeRequest`, `BuildRequestBody`, `NestSourceIDs`, `TemplateBlock`, `ArtifactOptions`) and `internal/web/wire/decode.go` (`StripAntiXSSI`, `ParseChunked` with the three 10% malformed-rate gates and `byteCountMismatchTotal`, `CollectRPCIDs`, `ExtractResult`, `DecodeResponse` with the null-result classification tree), plus `internal/web/wire/index.go` (`At`/`Str`/`Int`/`Bool`/`List` + `Opt*` variants, all returning `*ShapeDriftError`).
 - **Files touched:** `internal/web/wire/encode.go`, `internal/web/wire/encode_test.go`, `internal/web/wire/decode.go`, `internal/web/wire/decode_test.go`, `internal/web/wire/index.go`, `internal/web/wire/index_test.go`, `internal/web/wire/testdata/golden/*.json` (Python-generated golden bytes, one per RPC), `internal/web/wire/testdata/chunked/*.txt` (the 10 chunked-parser fixtures).
 - **Acceptance criteria:**
@@ -134,7 +134,7 @@ Phase issue: #<phase-issue>
 - **Suggested PR title:** `wire: implement encode, chunked decode, and positional index helpers with golden tests`
 
 #### T-P1-4: policy — five-class `IdempotencyRegistry` with startup assertion
-- **Parent phase issue:** #<phase-issue>
+- **Parent phase issue:** #4
 - **One-line description:** Land `internal/web/policy` with the five-class `IdempotencyRegistry` keyed by `(Method, variant)` and a startup assertion that every declared `Method` has an entry (an unregistered RPC fails `init` of the registry, by design).
 - **Files touched:** `internal/web/policy/registry.go`, `internal/web/policy/registry_test.go`, `internal/web/policy/doc.go`, `boundaries.yaml` (extend `internal/web/wire` row to also cover `internal/web/policy`).
 - **Acceptance criteria:**
@@ -151,12 +151,12 @@ Phase issue: #<phase-issue>
 ---
 
 ### Phase 2 — Auth + session
-Phase issue: #<phase-issue>
+Phase issue: #5
 
 > Phase 2 owns every credential the user owns. The packages in this phase must use `internal/atomicio` for any write to `storage_state.json` (rule 4 + F2) and must round-trip with the Python CLI's `storage_state.json` byte-for-byte on the parity attributes. The split is: cookie jar (RFC 6265), storage I/O + cross-compat normalization, atomic-write primitive + paths, and the policy layer (allowlist + minimum-required set + binding matrix).
 
 #### T-P2-1: cookiejar — RFC 6265 `http.CookieJar` with `__Secure-`/`__Host-` enforcement
-- **Parent phase issue:** #<phase-issue>
+- **Parent phase issue:** #5
 - **One-line description:** Land `internal/auth/cookiejar` with the `Cookie` struct and `Jar` (implementing `http.CookieJar`), RFC 6265 §5.3 storage keyed by `(name, domain, path)`, §5.4 selection ordering, `Secure`-awareness, public-suffix rejection, and `__Secure-`/`__Host-` prefix enforcement, plus `All()`, `Snapshot()`, `HeaderFor(url)`.
 - **Files touched:** `internal/auth/cookiejar/jar.go`, `internal/auth/cookiejar/cookie.go`, `internal/auth/cookiejar/jar_test.go`, `internal/auth/cookiejar/testdata/selections.json` (§5.4 selection matrix fixture).
 - **Acceptance criteria:**
@@ -173,7 +173,7 @@ Phase issue: #<phase-issue>
 - **Suggested PR title:** `auth: add RFC 6265 cookie jar with prefix and public-suffix enforcement`
 
 #### T-P2-2: storage — lossless `storage_state.json` round-trip with cross-CLI normalization
-- **Parent phase issue:** #<phase-issue>
+- **Parent phase issue:** #5
 - **One-line description:** Land `internal/auth/storage` with `storage_state.json` read/write (lossless attribute round-trip, including `expires: -1` ⇄ `nil` and `sameSite`), import normalizers (`expirationDate` → `expires`, `hostOnly`, `sameSite` case forms, bare cookie arrays, `origins` dropped), the `notebooklm.account` in-band namespace, and `context.json` legacy read + in-band promotion.
 - **Files touched:** `internal/auth/storage/storage.go`, `internal/auth/storage/normalizers.go`, `internal/auth/storage/storage_test.go`, `internal/auth/storage/testdata/python_storage_state.json` (a fixture produced by the Python CLI), `internal/auth/storage/testdata/legacy_context.json` (legacy context.json fixture).
 - **Acceptance criteria:**
@@ -191,7 +191,7 @@ Phase issue: #<phase-issue>
 - **Suggested PR title:** `auth: add lossless storage_state read/write with Python-CLI normalization`
 
 #### T-P2-3: policy — domain allowlist, `MinimumRequiredCookies`, and binding matrix
-- **Parent phase issue:** #<phase-issue>
+- **Parent phase issue:** #5
 - **One-line description:** Land `internal/auth/policy` with the host allowlist (required + optional labels + regional ccTLDs), the `MinimumRequiredCookies` set, the Tier 2 binding matrix, the typed validation reasons (`missing_cookie`, `psidts_unroutable`, `no_secondary_binding`), and the two-host diagnostic messages.
 - **Files touched:** `internal/auth/policy/allowlist.go`, `internal/auth/policy/minimum.go`, `internal/auth/policy/binding.go`, `internal/auth/policy/policy.go`, `internal/auth/policy/policy_test.go`, `internal/auth/policy/testdata/hosts.txt` (committed allowlist snapshot for drift detection).
 - **Acceptance criteria:**
@@ -207,7 +207,7 @@ Phase issue: #<phase-issue>
 - **Suggested PR title:** `auth: add policy allowlist, minimum-cookie set, and binding-matrix diagnostics`
 
 #### T-P2-4: atomicio + paths — atomic-write primitive, `0700` dirs, `NOTEBOOKLM_HOME` resolution
-- **Parent phase issue:** #<phase-issue>
+- **Parent phase issue:** #5
 - **One-line description:** Land `internal/atomicio` (temp + chmod 0600 + sync + rename, `0700` directory creation with the Windows ACL carve-out, `.bak` rollback, the four `flock` derivations from one path function plus per-path in-process mutexes) and `internal/paths` (`NOTEBOOKLM_HOME`, profile dirs, legacy fallback for the `default` profile only, `config.json` with an mtime cache, `PathInfo` for `status --paths`).
 - **Files touched:** `internal/atomicio/atomic.go`, `internal/atomicio/flock.go`, `internal/atomicio/atomic_test.go`, `internal/atomicio/flock_test.go`, `internal/paths/home.go`, `internal/paths/profile.go`, `internal/paths/config.go`, `internal/paths/paths_test.go`, `boundaries.yaml` (add `internal/atomicio` and `internal/paths` rows: stdlib + `internal/redact`).
 - **Acceptance criteria:**
@@ -228,12 +228,12 @@ Phase issue: #<phase-issue>
 ---
 
 ### Phase 3 — Public library API (transport + runtime + config)
-Phase issue: #<phase-issue>
+Phase issue: #6
 
 > Phase 3 wires the wire layer (Phase 1) + the auth stack (Phase 2) into a runnable HTTP transport. The split keeps the runtime lifecycle primitive separate from the transport kernel (so Phase 4 can build the refresh ladder on top of a stable `Supervisor`), and the middleware wiring in its own ticket (so the four-middleware order is reviewed in isolation as a small, reviewable PR).
 
 #### T-P3-1: runtime — `Lifecycle`, `Supervisor`, `Metrics`, `deadline.Budget`
-- **Parent phase issue:** #<phase-issue>
+- **Parent phase issue:** #6
 - **One-line description:** Land `internal/runtime` with `Lifecycle` (open/close waves, monotonic resource generations, phased participant ordering, rollback on a failed open, deterministic teardown failure precedence), `Supervisor` (drain admission → metrics → semaphore; call and operation leases; cancellation-safe settlement; race-free admitted child spawning), `Metrics` (atomic counters `rpcCallsStarted/Succeeded/Failed`, `rpcAuthRetries`, `rpcDecodeErrors`, `queueWaitSeconds`, `byteCountMismatchTotal` + the `RPCEvent` callback fan-out), and `deadline.Budget` (aggregate deadline with `Remaining()` and `Expired()`).
 - **Files touched:** `internal/runtime/lifecycle.go`, `internal/runtime/supervisor.go`, `internal/runtime/metrics.go`, `internal/runtime/deadline.go`, `internal/runtime/runtime_test.go`, `internal/runtime/lifecycle_test.go`, `internal/runtime/supervisor_test.go`, `internal/runtime/deadline_test.go`, `boundaries.yaml` (add `internal/runtime` row: stdlib + `internal/redact`).
 - **Acceptance criteria:**
@@ -249,7 +249,7 @@ Phase issue: #<phase-issue>
 - **Suggested PR title:** `runtime: add Lifecycle, Supervisor, Metrics, and aggregate deadline.Budget`
 
 #### T-P3-2: transport/kernel + transport/errors + transport/stream — HTTP kernel with epoch fencing
-- **Parent phase issue:** #<phase-issue>
+- **Parent phase issue:** #6
 - **One-line description:** Land `internal/web/transport` `Kernel` (owns `*http.Client` + `Jar`, `Post` with response size cap, `ActivateEpoch`/`FenceEpoch`/`AssertEpoch`, `Close`), `errors.go` (transport error shapes and `Retry-After` parsing — both delta-seconds and HTTP-date forms), and `stream.go` (streaming POST with the size cap).
 - **Files touched:** `internal/web/transport/kernel.go`, `internal/web/transport/errors.go`, `internal/web/transport/stream.go`, `internal/web/transport/kernel_test.go`, `internal/web/transport/errors_test.go`, `internal/web/transport/stream_test.go`, `boundaries.yaml` (extend `internal/web/wire` row coverage to `internal/web/transport`: `internal/web/wire` + `internal/runtime` + `internal/redact`).
 - **Acceptance criteria:**
@@ -265,7 +265,7 @@ Phase issue: #<phase-issue>
 - **Suggested PR title:** `transport: add Kernel with epoch fencing, size cap, and Retry-After parsing`
 
 #### T-P3-3: transport/Executor + transport/Runtime — RPC orchestration and the four-middleware chain
-- **Parent phase issue:** #<phase-issue>
+- **Parent phase issue:** #6
 - **One-line description:** Land `internal/web/transport` `Executor` (one logical RPC: mint request id → consult the idempotency registry → resolve the method id → encode → dispatch through the chain → decode → map errors; owns the decode-time auth-refresh-and-retry leg and the shared `RefreshBudget`), `Runtime` (authed POST entry: loop-free epoch check, auth snapshot capture, envelope materialization, chain dispatch, **unconditional pre-POST rebuild in `terminal`**, the four middlewares wired in pinned order), and `internal/config` (env resolution, base-URL allowlist, `DEFAULT_BL` + build-label regex/staleness helpers, `NOTEBOOKLM_HL`).
 - **Files touched:** `internal/web/transport/executor.go`, `internal/web/transport/runtime.go`, `internal/web/transport/middleware.go`, `internal/web/transport/refresh_budget.go`, `internal/web/transport/executor_test.go`, `internal/web/transport/runtime_test.go`, `internal/web/transport/middleware_test.go`, `internal/config/config.go`, `internal/config/buildlabel.go`, `internal/config/config_test.go`, `internal/web/transport/testdata/scenarios/*.json` (httptest scenario fixtures).
 - **Acceptance criteria:**
