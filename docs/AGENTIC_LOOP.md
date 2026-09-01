@@ -177,9 +177,9 @@ Responsibilities:
   boundary discipline (F3), per-feature specs normative (F4).
 - Writes tests. All three tiers per ticket scope.
 - Runs `make check` before opening the PR.
-- Opens the PR with author `raihankhanraka@gmail.com`, body that
-  `Closes #<ticket>` + `Refs #<phase-issue>`, and a checklist of acceptance
-  criteria with checkboxes.
+- Opens the PR with author `notebooklm-go-bot <bot@notebooklm-go.local>`,
+  body that `Closes #<ticket>` + `Refs #<phase-issue>`, and a checklist of
+  acceptance criteria with checkboxes. (See §5.2 for why bot-author.)
 - Returns the PR URL to the Scrum-master.
 
 The Code agent never reviews its own PR. The QA agent does.
@@ -223,8 +223,8 @@ Passively watches the board and writes a daily heartbeat to
    │    ├─ reads relevant docs/features/NN-*.md if feature work           │
    │    ├─ implements + writes tests                                       │
    │    ├─ runs `make check` locally                                       │
-   │    ├─ commits + pushes                                                │
-   │    ├─ opens PR: gh pr create --author raihankhanraka@gmail.com \     │
+   │    ├─ commits + pushes (bot identity, see §5.2)                       │
+   │    ├─ opens PR: gh pr create --author notebooklm-go-bot \             │
    │    │   --body "Closes #<ticket>\nRefs #<phase-issue>\n\n- [ ] AC1..." │
    │    └─ returns PR URL to Scrum-master                                  │
    │                                                                      │
@@ -262,29 +262,68 @@ Passively watches the board and writes a daily heartbeat to
   is deleted on the remote.
 - `.worktrees/` is added to `.gitignore` in S1/T1.
 
-### 5.2 PR author identity
+### 5.2 Commit and PR author identity
 
-`gh pr create --author raihankhanraka@gmail.com` requires that the local
-git user is configured for that email. The Scrum-master runs:
+The Scrum-master runs:
 
 ```bash
-git config user.name  "Raihan Khan"
-git config user.email "raihankhanraka@gmail.com"
+git -c user.name="notebooklm-go-bot" \
+    -c user.email="bot@notebooklm-go.local" \
+    commit ...
 ```
 
-once per worktree. The `Co-authored-by:` trailer on every commit includes
-the actual agent handle so authorship provenance is preserved.
+every commit is made by the loop bot, not by the user. This is a deliberate
+constraint imposed by the runtime guardrail that classifies commits under
+the user's identity as a privileged "self-modification" operation (an
+identity-spoofing / credential-misuse shape). The loop bot is not a real
+identity; it exists only so the loop can run end-to-end.
+
+Human authorship is preserved via a `Co-authored-by:` trailer on every
+commit:
+
+```
+wire: implement internal/redact with credential redaction (#12)
+
+Co-authored-by: Raihan Khan <raihankhanraka@gmail.com>
+```
+
+`gh pr create` is invoked under the user's GitHub login (the loop's `gh`
+auth is the user's), but the **commit author** on each commit is the bot.
+The Co-authored-by trailer ensures `git shortlog -c` and GitHub's
+"Co-authored by" panel both credit the human correctly.
+
+The bot identity **must not** be used to bypass any rule in
+[`docs/AGENTS.md`](AGENTS.md). Specifically:
+
+- The bot is the author of the **commit**, not the author of the **code**.
+  Every line of code is still owned by the human under the project's MIT
+  license (per `LICENSE`); the bot identity is a git plumbing detail.
+- The bot identity must never be used to commit to anyone else's repo, or
+  push to a branch the user has not approved.
+- The bot identity must never carry credentials, tokens, or secrets. PR
+  automation tokens (e.g., `GITHUB_TOKEN` for CI) are not the bot's; they
+  are the user's, scoped per `gh` auth.
 
 ### 5.3 Commit and PR conventions
 
 - One commit per ticket, message format:
   `<scope>: <imperative summary> (#<ticket>)`.
 
-  Example: `wire: implement internal/redact with credential redaction (#12)`.
+  Example:
+  ```
+  wire: implement internal/redact with credential redaction (#12)
+
+  - quotes-words.json ported from notebooklm-py/_redact::REDACT_QUOTED_JSON
+  - html-escaped.json ported (preserve \\u003c etc.)
+  - form/prose and bare-token regexes added
+  - URL redactors cover ?secret=, ;session=, cookies, Authorization
+
+  Co-authored-by: Raihan Khan <raihankhanraka@gmail.com>
+  ```
 - PR body checklist, copy-pasted from the ticket body:
   ```
   Closes #12
-  Refs #1
+  Refs #3
 
   - [ ] AC1: `redact.Cookie(...)` masks the value
   - [ ] AC2: regex families ported from notebooklm-py/_redact
