@@ -1,42 +1,25 @@
 // Package logging provides a stderr-only slog handler for notebooklm-go.
 //
-// This file declares the local redactor seam used by handleAttr (see
-// handler.go). It exists so T-P0-2 can land BEFORE internal/redact
-// (T-P0-3). When T-P0-3 merges, the stub implementation below is replaced
-// with the real import — no other file in this package needs to change.
+// The redaction hook (see handler.go) routes every attribute value
+// through internal/redact.Apply so secrets embedded in attribute
+// values are masked before they hit the wire. The seam lives in this
+// file so the rest of the package never imports internal/redact
+// directly — easier to swap out for testing.
 package logging
 
-import "sync/atomic"
+import (
+	"sync/atomic"
+
+	"github.com/raihankhan/notebooklm-go/internal/redact"
+)
 
 // redactor is the minimal seam between this package and internal/redact.
-//
-// It is deliberately narrow: a single method that takes the raw attribute
-// bytes (already formatted for the text handler) and returns the bytes
-// after redaction. The text handler calls ReplaceAttr per attribute, so
-// the redaction happens at the attribute boundary where it has access to
-// key + value type, not just the on-wire string.
-//
-// T-P0-3 will replace the local implementation by:
-//
-//  1. Removing this file's noopRedactor.
-//  2. Importing "github.com/raihankhan/notebooklm-go/internal/redact".
-//  3. Injecting a *redact.Redactor via WithRedactor(...) at construction.
+// It is deliberately narrow: a single method that takes the raw
+// attribute bytes (already formatted for the text handler) and returns
+// the bytes after redaction. internal/redact.Apply satisfies it
+// directly; tests can inject their own implementation via WithRedactor.
 type redactor interface {
 	Apply([]byte) []byte
-}
-
-// noopRedactor is the placeholder used until T-P0-3 lands. It returns the
-// input unchanged so the handler is fully functional (and the test suite
-// green) before the real redactor exists.
-type noopRedactor struct{}
-
-// Apply satisfies redactor and is a no-op pass-through.
-func (noopRedactor) Apply(b []byte) []byte { return b }
-
-// defaultRedactor returns the package-default redactor. Today this is the
-// no-op; tomorrow it will be the real internal/redact implementation.
-func defaultRedactor() redactor {
-	return noopRedactor{}
 }
 
 // hookRedactor holds the package-level redactor used by replaceAttr.
@@ -48,6 +31,20 @@ func init() {
 	r := defaultRedactor()
 	hookRedactor.Store(&r)
 }
+
+// defaultRedactor returns the package-default redactor: the real
+// internal/redact.Apply implementation.
+func defaultRedactor() redactor {
+	return redactorFunc(redact.Apply)
+}
+
+// redactorFunc adapts a free function to the redactor interface so we
+// do not need to declare a local wrapper struct just to satisfy the
+// seam.
+type redactorFunc func([]byte) []byte
+
+// Apply satisfies redactor by delegating to the underlying function.
+func (f redactorFunc) Apply(b []byte) []byte { return f(b) }
 
 // WithRedactor lets callers (mainly tests; eventually main.go) inject a
 // concrete redactor. Returns a cleanup function that restores the previous
