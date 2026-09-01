@@ -45,7 +45,7 @@ func OptionLevel(l slog.Level) Option {
 // additive on top of NOTEBOOKLM_LOG_LEVEL — callers can still be
 // constrained downward by OptionLevel.
 //
-// Behaviour matches kubectl / docker / gh: -v is debug, -vv is debug
+// Behavior matches kubectl / docker / gh: -v is debug, -vv is debug
 // (counter is informational; we don't differentiate v=2 from v=1 yet).
 func OptionVerbosity(count int) Option {
 	return func(in *slog.Logger) *slog.Logger {

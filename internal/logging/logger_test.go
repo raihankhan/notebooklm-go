@@ -172,7 +172,7 @@ func TestNew_DefaultLevel_HonoursEnv(t *testing.T) {
 }
 
 // TestNew_DefaultLevel_DefaultsToInfo verifies the default info level
-// suppresses debug when the env var is unset / unrecognised.
+// suppresses debug when the env var is unset / unrecognized.
 func TestNew_DefaultLevel_DefaultsToInfo(t *testing.T) {
 	t.Setenv("NOTEBOOKLM_LOG_LEVEL", "nonsense")
 
@@ -191,7 +191,7 @@ func TestNew_DefaultLevel_DefaultsToInfo(t *testing.T) {
 }
 
 // TestOptionLevel rebuilds the handler with a custom level and asserts the
-// new level is honoured.
+// new level is honored.
 func TestOptionLevel(t *testing.T) {
 	t.Parallel()
 
@@ -297,7 +297,7 @@ func TestWithRedactor_Restores(t *testing.T) {
 }
 
 // TestNew_HonoursRedactorAfterConstruction confirms that WithRedactor
-// (which mutates the package-level pointer) is honoured by loggers
+// (which mutates the package-level pointer) is honored by loggers
 // constructed BEFORE the swap. The redactor is resolved lazily inside
 // replaceAttr, not captured at handler-construction time — this test
 // pins that contract.

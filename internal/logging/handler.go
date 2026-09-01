@@ -38,7 +38,7 @@ func RequestID(ctx context.Context) string {
 
 // levelFromEnv parses NOTEBOOKLM_LOG_LEVEL into a slog.Level. The supported
 // tokens are case-insensitive: "debug", "info", "warn"/"warning", "error".
-// Unrecognised or empty values default to slog.LevelInfo so a typo never
+// Unrecognized or empty values default to slog.LevelInfo so a typo never
 // causes a silent switch to a higher level (we prefer noise over silence).
 //
 // The -v counter, when supplied via OptionLevel, is applied AFTER the env
