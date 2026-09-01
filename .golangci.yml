@@ -1,0 +1,37 @@
+# golangci-lint configuration for github.com/raihankhan/notebooklm-go
+#
+# Phase 0 deliverable: the 11-linter baseline from AGENTS.md / Phase 0 plan.
+# Disable `depguard` (not applicable to a fresh module; reintroduce in Phase 1+).
+
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  disable:
+    - depguard
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - revive
+    - gosec
+    - bodyclose
+    - contextcheck
+    - errorlint
+    - nilerr
+    - unconvert
+    - misspell
+
+linters-settings:
+  misspell:
+    locale: US
+  revive:
+    rules:
+      - name: exported
+        disabled: false
+  gosec:
+    excludes:
+      - G104
