@@ -1,0 +1,119 @@
+schema_version: 2
+# Cookie-domain allowlist drift-test fixture.
+#
+# Source of truth: docs/05-auth.md §"Cookie-domain allowlist" and
+# notebooklm._auth.cookie_policy.{REQUIRED_COOKIE_DOMAINS,
+# OPTIONAL_COOKIE_DOMAINS_BY_LABEL, GOOGLE_REGIONAL_CCTLDS}.
+#
+# This file is the canonical ordering of hosts the policy package
+# accepts; the policy_test.go drift test parses the schema_version
+# line and asserts it is non-zero. Bump schema_version when adding
+# a host (CI fails otherwise).
+#
+# Format:
+#   schema_version: <int>    MUST be line 1; positive integer
+#   # <comment>              informational only
+#   <host>                   one host per line, grouped by tier
+#
+# Tier ordering is REQUIRED → OPTIONAL → REGIONAL; do not reshuffle.
+# Both dotted and undotted variants are listed (issue #369).
+
+# --- Required hosts ---
+.google.com
+google.com
+.notebook.google.com
+notebook.google.com
+.notebooklm.google.com
+notebooklm.google.com
+.notebooklm.cloud.google.com
+notebooklm.cloud.google.com
+.googleusercontent.com
+accounts.google.com
+.accounts.google.com
+drive.google.com
+.drive.google.com
+
+# --- Optional hosts (opt-in via --include-domains) ---
+.youtube.com
+youtube.com
+accounts.youtube.com
+.accounts.youtube.com
+docs.google.com
+.docs.google.com
+myaccount.google.com
+.myaccount.google.com
+mail.google.com
+.mail.google.com
+
+# --- Regional ccTLDs ---
+.google.com.sg
+.google.com.au
+.google.com.br
+.google.com.mx
+.google.com.ar
+.google.com.hk
+.google.com.tw
+.google.com.my
+.google.com.ph
+.google.com.vn
+.google.com.pk
+.google.com.bd
+.google.com.ng
+.google.com.eg
+.google.com.tr
+.google.com.ua
+.google.com.co
+.google.com.pe
+.google.com.sa
+.google.com.ae
+.google.co.uk
+.google.co.jp
+.google.co.in
+.google.co.kr
+.google.co.za
+.google.co.nz
+.google.co.id
+.google.co.th
+.google.co.il
+.google.co.ve
+.google.co.cr
+.google.co.ke
+.google.co.ug
+.google.co.tz
+.google.co.ma
+.google.co.ao
+.google.co.mz
+.google.co.zw
+.google.co.bw
+.google.cn
+.google.de
+.google.fr
+.google.it
+.google.es
+.google.nl
+.google.pl
+.google.ru
+.google.ca
+.google.be
+.google.at
+.google.ch
+.google.se
+.google.no
+.google.dk
+.google.fi
+.google.pt
+.google.gr
+.google.cz
+.google.ro
+.google.hu
+.google.ie
+.google.sk
+.google.bg
+.google.hr
+.google.si
+.google.lt
+.google.lv
+.google.ee
+.google.lu
+.google.cl
+.google.cat
