@@ -12,18 +12,19 @@ import "os"
 // (tracked separately; the macOS/Linux POSIX path is the only one
 // exercised by CI today).
 //
-// acquireOSLock and releaseOSLock panic on Windows so a misuse in
-// development fails loud rather than silently degrading to "no lock".
-// The ticket body gates Windows-only code behind //go:build windows
-// and skip-gates it in non-Windows CI; this file is the Windows half.
+// acquireOSLock and releaseOSLock return ErrLockedError on Windows so
+// any accidental runtime use surfaces as the typed Try*-shape error
+// rather than a panic. The tests skip on Windows (see skipOnWindows
+// in flock_test.go), so the Windows build is exercised at compile
+// time only.
 func acquireOSLock(f *os.File, kind LockType, blocking bool) error {
 	_ = f
 	_ = kind
 	_ = blocking
-	panic("atomicio: flock is not implemented on Windows in this build")
+	return lockedError("(windows stub: flock not implemented in this build)")
 }
 
 func releaseOSLock(f *os.File) error {
 	_ = f
-	panic("atomicio: flock is not implemented on Windows in this build")
+	return lockedError("(windows stub: flock not implemented in this build)")
 }

@@ -129,9 +129,6 @@ func (e *ErrLockedError) Error() string {
 	return fmt.Sprintf("atomicio: %s is locked by another holder", e.Path)
 }
 
-// lockedError is the package-private sentinel constructor.
-func lockedError(path string) error { return &ErrLockedError{Path: path} }
-
 // pathIsLockPath returns true if path already ends in ".lock" (i.e. is
 // itself a lock file passed in by mistake). Used to detect a caller bug
 // without preventing the call — we simply warn via the returned path.

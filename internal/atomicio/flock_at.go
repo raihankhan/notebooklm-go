@@ -7,6 +7,13 @@ import (
 	"path/filepath"
 )
 
+// lockedError is the package-private sentinel constructor for
+// ErrLockedError. Defined here (rather than in flock.go) so it is
+// reachable on every platform: the Windows build does not compile
+// flock_posix.go, which is the only call site, but Windows still
+// references the type via TryShared / TryExclusive's errors.As branch.
+func lockedError(path string) error { return &ErrLockedError{Path: path} }
+
 // lockAt is the single path function every Lock helper derives from. The
 // blocking flag selects blocking vs non-blocking acquire at the OS level.
 //
