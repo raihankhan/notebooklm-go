@@ -58,3 +58,12 @@ packages:
   # application-layer packages.
   - path: github.com/raihankhan/notebooklm-go/internal/logging
     mode: internal
+
+  # `internal/auth/cookiejar` is the RFC 6265 cookie store the
+  # transport kernel holds (T-P2-1). It imports the redaction
+  # primitive so Cookie.String() / HeaderFor() never leak a value to
+  # a log or error sink, and nothing else inside `internal/`. The
+  # public-suffix check is implemented inline rather than via
+  # golang.org/x/net/publicsuffix so this package stays stdlib-only.
+  - path: github.com/raihankhan/notebooklm-go/internal/auth/cookiejar
+    mode: internal

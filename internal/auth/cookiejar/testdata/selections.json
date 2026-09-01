@@ -1,0 +1,121 @@
+{
+  "comment": "RFC 6265 §5.4 selection matrix. Each row is (url, set, expected names in returned header). The 'set' field is a list of (name, value, domain, path, secure) tuples that the jar receives via SetCookies; the 'want' field is the ordered set of cookie names the jar must return via Cookies(url). The literal '<host>' in domain means the URL's host (so the test author can express domain-match intent without hard-coding the host).",
+  "cases": [
+    {
+      "name": "exact_host_longest_path_wins",
+      "url": "https://example.com/a/b/c",
+      "set": [
+        {"name": "a", "value": "1", "domain": "<host>", "path": "/a", "secure": true},
+        {"name": "a", "value": "2", "domain": "<host>", "path": "/a/b", "secure": true},
+        {"name": "a", "value": "3", "domain": "<host>", "path": "/a/b/c", "secure": true}
+      ],
+      "want": ["a"],
+      "want_value": "3"
+    },
+    {
+      "name": "parent_domain_matches_when_no_exact",
+      "url": "https://sub.example.com/",
+      "set": [
+        {"name": "x", "value": "from_parent", "domain": "example.com", "path": "/", "secure": true}
+      ],
+      "want": ["x"],
+      "want_value": "from_parent"
+    },
+    {
+      "name": "exact_host_beats_parent_domain",
+      "url": "https://sub.example.com/",
+      "set": [
+        {"name": "x", "value": "from_parent", "domain": "example.com", "path": "/", "secure": true},
+        {"name": "x", "value": "from_exact", "domain": "<host>", "path": "/", "secure": true}
+      ],
+      "want": ["x"],
+      "want_value": "from_exact"
+    },
+    {
+      "name": "osid_on_two_hosts_independent",
+      "url": "https://notebooklm.google.com/",
+      "set": [
+        {"name": "OSID", "value": "for_notebooklm", "domain": "<host>", "path": "/", "secure": true},
+        {"name": "OSID", "value": "for_notebook", "domain": "notebook.google.com", "path": "/", "secure": true}
+      ],
+      "want": ["OSID"],
+      "want_value": "for_notebooklm"
+    },
+    {
+      "name": "osid_on_other_host_picks_other",
+      "url": "https://notebook.google.com/",
+      "set": [
+        {"name": "OSID", "value": "for_notebooklm", "domain": "notebooklm.google.com", "path": "/", "secure": true},
+        {"name": "OSID", "value": "for_notebook", "domain": "<host>", "path": "/", "secure": true}
+      ],
+      "want": ["OSID"],
+      "want_value": "for_notebook"
+    },
+    {
+      "name": "secure_filtered_for_http",
+      "url": "http://example.com/",
+      "set": [
+        {"name": "s", "value": "v", "domain": "<host>", "path": "/", "secure": true}
+      ],
+      "want": []
+    },
+    {
+      "name": "secure_returned_for_https",
+      "url": "https://example.com/",
+      "set": [
+        {"name": "s", "value": "v", "domain": "<host>", "path": "/", "secure": true}
+      ],
+      "want": ["s"]
+    },
+    {
+      "name": "path_must_be_prefix",
+      "url": "https://example.com/api/v2/users",
+      "set": [
+        {"name": "no", "value": "v", "domain": "<host>", "path": "/api/v3", "secure": true}
+      ],
+      "want": []
+    },
+    {
+      "name": "path_match_at_boundary",
+      "url": "https://example.com/api/v2/",
+      "set": [
+        {"name": "yes", "value": "v", "domain": "<host>", "path": "/api/v2", "secure": true}
+      ],
+      "want": ["yes"]
+    },
+    {
+      "name": "no_match_on_unrelated_domain",
+      "url": "https://other.example.org/",
+      "set": [
+        {"name": "z", "value": "v", "domain": "example.com", "path": "/", "secure": true}
+      ],
+      "want": []
+    },
+    {
+      "name": "case_insensitive_domain_match",
+      "url": "https://Example.COM/",
+      "set": [
+        {"name": "ci", "value": "v", "domain": "example.com", "path": "/", "secure": true}
+      ],
+      "want": ["ci"]
+    },
+    {
+      "name": "host_only_cookie_does_not_match_subdomain",
+      "set_url": "https://example.com/",
+      "url": "https://sub.example.com/",
+      "set": [
+        {"name": "ho", "value": "v", "domain": "", "path": "/", "secure": true}
+      ],
+      "want": []
+    },
+    {
+      "name": "host_only_cookie_matches_exact_host",
+      "set_url": "https://api.example.com/",
+      "url": "https://api.example.com/",
+      "set": [
+        {"name": "ho", "value": "v", "domain": "", "path": "/", "secure": true}
+      ],
+      "want": ["ho"]
+    }
+  ]
+}
