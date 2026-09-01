@@ -28,7 +28,11 @@ jobs:
       - name: setup golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: latest
+          # Pin to v2.5.0: the v1.x line (max v1.64.8) is built with the Go 1.24
+          # toolchain and refuses to parse a go.mod declaring `go 1.25`. The
+          # .golangci.yml is already in v2 config format. Re-bump only after
+          # verifying release notes cover the target Go version.
+          version: v2.5.0
 
       - name: go env
         run: go env GOOS GOARCH
@@ -60,7 +64,11 @@ jobs:
       - name: setup golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: latest
+          # Pin to v2.5.0: the v1.x line (max v1.64.8) is built with the Go 1.24
+          # toolchain and refuses to parse a go.mod declaring `go 1.25`. The
+          # .golangci.yml is already in v2 config format. Re-bump only after
+          # verifying release notes cover the target Go version.
+          version: v2.5.0
 
       - name: check
         run: make check
