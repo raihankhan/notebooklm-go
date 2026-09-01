@@ -123,3 +123,18 @@ packages:
   # so a redact bug cannot cascade into the lifecycle primitive.
   - path: github.com/raihankhan/notebooklm-go/internal/runtime
     mode: stdlib
+
+  # `internal/web/transport` is the HTTP kernel, the streaming POST
+  # path, and the typed transport-error vocabulary (T-P3-2). It is
+  # mode=internal: stdlib + the three siblings listed below —
+  # internal/web/wire (single JSON adapter, used by the Executor in
+  # T-P3-3 once it lands), internal/runtime (the Supervisor /
+  # Lifecycle lease machinery that owns the in-flight WaitGroup),
+  # and internal/redact (so the typed error messages surface a
+  # masked credential rather than a verbatim `at=` token). No
+  # third-party dependencies: the cookie jar is mounted via the
+  # http.CookieJar interface so the kernel does not bind to a
+  # concrete cookie-jar type. See `docs/04-transport.md` for the
+  # design contract this row enforces.
+  - path: github.com/raihankhan/notebooklm-go/internal/web/transport
+    mode: internal
