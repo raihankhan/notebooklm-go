@@ -1,0 +1,9 @@
+{
+  "scenario": "server_error_retry_success",
+  "description": "Server emits 500 once, then 200 on retry. Retry middleware must consume the 500 and surface the 200.",
+  "method": "MethodGetNotebook",
+  "variant": "",
+  "expected_class": "read-only",
+  "expected_status": 200,
+  "expected_attempts": 2
+}

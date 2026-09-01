@@ -1,0 +1,10 @@
+{
+  "scenario": "ratelimit_retry_after_delta",
+  "description": "Server emits 429 with Retry-After: 1 (delta-seconds). The retry middleware must honor the hint and succeed on the second attempt.",
+  "method": "MethodListNotebooks",
+  "variant": "",
+  "expected_class": "safe",
+  "expected_status": 200,
+  "expected_attempts": 2,
+  "expected_retry_after_forms": ["delta-seconds", "http-date"]
+}

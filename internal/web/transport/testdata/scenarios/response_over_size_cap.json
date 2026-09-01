@@ -1,0 +1,12 @@
+{
+  "scenario": "response_over_size_cap",
+  "description": "Server emits a response body larger than the kernel's maxBytes cap. The chain must surface *TooLargeError with Got > Limit.",
+  "method": "MethodListNotebooks",
+  "variant": "",
+  "expected_class": "safe",
+  "expected_status": 200,
+  "expected_attempts": 1,
+  "expected_error": "ErrResponseTooLarge",
+  "expected_too_large_limit": 100,
+  "expected_too_large_got_min": 101
+}

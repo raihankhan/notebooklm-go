@@ -24,3 +24,11 @@ var Commit = "unknown"
 // Date is the UTC build timestamp in RFC 3339 form. Overwritten by -ldflags
 // at link time. "unknown" when unset so log lines stay greppable.
 var Date = "unknown"
+
+// BuildLabel is the frontend build-label fingerprint the chat
+// endpoint requires. Overwritten by -ldflags at link time; the
+// placeholder ("unknown") means the binary was built without the
+// injection and the chat RPC falls back to DEFAULT_BL. The
+// staleness check in internal/config.IsBuildLabelStale compares an
+// operator-supplied override against this build-time value.
+var BuildLabel = "unknown"

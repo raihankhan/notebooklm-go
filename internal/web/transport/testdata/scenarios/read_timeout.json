@@ -1,0 +1,10 @@
+{
+  "scenario": "read_timeout",
+  "description": "Server accepts the connection but never writes a response. The chain must surface a read-timeout error.",
+  "method": "MethodListNotebooks",
+  "variant": "",
+  "expected_class": "safe",
+  "expected_status": 0,
+  "expected_attempts": 1,
+  "expected_error": "read-timeout"
+}

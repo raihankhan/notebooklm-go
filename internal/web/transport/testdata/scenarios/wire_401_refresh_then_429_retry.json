@@ -1,0 +1,11 @@
+{
+  "scenario": "wire_401_refresh_then_429_retry",
+  "description": "The regression test for the stale-envelope bug class: server emits 401, then 429, then 200. The terminal middleware must refresh, then the retry middleware must consume the 429 on the rebuilt envelope (the rebuilt envelope must carry the post-refresh CSRF cookie, not the stale pre-refresh one). The test asserts both the wire cookie the server saw on the third attempt and the count of refreshes (exactly 1).",
+  "method": "MethodListNotebooks",
+  "variant": "",
+  "expected_class": "safe",
+  "expected_status": 200,
+  "expected_attempts": 3,
+  "expected_refresh_count": 1,
+  "expected_post_refresh_cookie_marker": "post-refresh-csrf"
+}

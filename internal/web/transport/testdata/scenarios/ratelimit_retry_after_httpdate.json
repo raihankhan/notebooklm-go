@@ -1,0 +1,10 @@
+{
+  "scenario": "ratelimit_retry_after_httpdate",
+  "description": "Server emits 429 with Retry-After in HTTP-date form. The retry middleware must parse it and succeed on the second attempt.",
+  "method": "MethodListNotebooks",
+  "variant": "",
+  "expected_class": "safe",
+  "expected_status": 200,
+  "expected_attempts": 2,
+  "expected_retry_after_form": "http-date"
+}

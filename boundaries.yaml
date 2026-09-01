@@ -138,3 +138,17 @@ packages:
   # design contract this row enforces.
   - path: github.com/raihankhan/notebooklm-go/internal/web/transport
     mode: internal
+
+  # `internal/config` is the operational configuration layer
+  # (T-P3-3): env-var resolution, base-URL allowlist, build-label
+  # parsing. It is mode=internal: stdlib + internal/web/wire (the
+  # three-host allowlist and the JSON-object override parser) +
+  # internal/buildinfo (the build-time build-label injection) +
+  # internal/redact (so a malformed-override log line cannot
+  # surface a credential-shaped substring). No third-party
+  # dependencies; the package must remain importable from any
+  # later layer (CLI, MCP, REST) without dragging a transport
+  # dependency along. See `docs/13-operations.md` for the env-var
+  # contract this row enforces.
+  - path: github.com/raihankhan/notebooklm-go/internal/config
+    mode: internal

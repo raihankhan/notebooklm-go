@@ -238,6 +238,27 @@ func ResolveID(methodName string) Method {
 	return Method(override)
 }
 
+// ParseOverridesJSON is the exported form of the internal override
+// parser. The config layer (T-P3-3) calls this to surface a typed
+// error when NOTEBOOKLM_RPC_OVERRIDES is malformed, and any later
+// operator tooling that needs the override map without going through
+// ResolveID can call this too.
+//
+// The shape contract is the same as parseOverridesJSON: a JSON
+// object whose keys are method names (e.g. "MethodListNotebooks")
+// and whose values are the obfuscated ids. A non-object input
+// returns the errOverrideShape sentinel so the caller can route it
+// to a log line.
+//
+// This function does NOT validate that the method names are in the
+// table — wire.ResolveID silently drops unknown entries at lookup
+// time, and the parser deliberately mirrors that tolerance so the
+// config layer does not impose a stricter contract than the
+// resolution path.
+func ParseOverridesJSON(raw string) (map[string]string, error) {
+	return parseOverridesJSON(raw)
+}
+
 // loadOverrides reads NOTEBOOKLM_RPC_OVERRIDES from the environment and
 // returns the parsed (methodName -> rpcId) map. A malformed env value is
 // treated as no overrides; we do not panic from a transport-layer helper.
