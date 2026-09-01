@@ -59,11 +59,28 @@ packages:
   - path: github.com/raihankhan/notebooklm-go/internal/logging
     mode: internal
 
-  # `internal/auth/cookiejar` is the RFC 6265 cookie store the
+# `internal/auth/cookiejar` is the RFC 6265 cookie store the
   # transport kernel holds (T-P2-1). It imports the redaction
   # primitive so Cookie.String() / HeaderFor() never leak a value to
   # a log or error sink, and nothing else inside `internal/`. The
   # public-suffix check is implemented inline rather than via
   # golang.org/x/net/publicsuffix so this package stays stdlib-only.
   - path: github.com/raihankhan/notebooklm-go/internal/auth/cookiejar
+    mode: internal
+
+  # `internal/atomicio` is the atomic-write primitive (T-P2-4). Leaf by
+  # policy: stdlib only, no module-internal imports (the helpers exist
+  # precisely so callers don't have to roll their own temp+chmod+rename
+  # dance). Cross-process flock is built on syscall.Flock (POSIX) with a
+  # Windows stub gated behind //go:build windows; no third-party lock
+  # library is allowed here, so this row stays stdlib.
+  - path: github.com/raihankhan/notebooklm-go/internal/atomicio
+    mode: stdlib
+
+  # `internal/paths` resolves ~/.notebooklm/, profile dirs, and the
+  # config.json sidecar. It imports internal/atomicio (for the mkdir-all
+  # helper used by some lookups) and nothing else inside the module;
+  # path resolution must stay free of app-layer and transport-layer
+  # imports so every package can import it.
+  - path: github.com/raihankhan/notebooklm-go/internal/paths
     mode: internal
