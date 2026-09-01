@@ -10,7 +10,11 @@ VERSION         ?= 0.1.0-dev
 PKG             := github.com/raihankhan/notebooklm-go
 BIN_DIR         := bin
 CMD             := ./cmd/notebooklm
-LDFLAGS         := -X $(PKG)/internal/buildinfo.Version=$(VERSION)
+COMMIT          := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+DATE            := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+LDFLAGS         := -X $(PKG)/internal/buildinfo.Version=$(VERSION) \
+                   -X $(PKG)/internal/buildinfo.Commit=$(COMMIT) \
+                   -X $(PKG)/internal/buildinfo.Date=$(DATE)
 
 GO              ?= go
 GOLANGCI_LINT   ?= golangci-lint
@@ -33,8 +37,8 @@ vet: ## Run go vet
 lint: ## Run golangci-lint (installed by CI)
 	$(GOLANGCI_LINT) run
 
-test: ## Run unit tests (passes on empty module)
-	@echo "OK"
+test: ## Run unit tests
+	$(GO) test -race ./...
 
 test-e2e: ## Run end-to-end tests (stubs until later phase)
 	@echo "e2e tests not yet implemented"
