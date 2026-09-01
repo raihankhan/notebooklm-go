@@ -2,6 +2,9 @@
 #
 # Phase 0 deliverable: the 11-linter baseline from AGENTS.md / Phase 0 plan.
 # Disable `depguard` (not applicable to a fresh module; reintroduce in Phase 1+).
+#
+# Note: golangci-lint v2.x requires per-linter settings under
+# `linters.settings.<name>` rather than the v1 top-level `linters-settings:`.
 
 version: "2"
 
@@ -24,14 +27,13 @@ linters:
     - nilerr
     - unconvert
     - misspell
-
-linters-settings:
-  misspell:
-    locale: US
-  revive:
-    rules:
-      - name: exported
-        disabled: false
-  gosec:
-    excludes:
-      - G104
+  settings:
+    misspell:
+      locale: US
+    revive:
+      rules:
+        - name: exported
+          disabled: false
+    gosec:
+      excludes:
+        - G104
