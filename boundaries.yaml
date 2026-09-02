@@ -152,3 +152,14 @@ packages:
   # contract this row enforces.
   - path: github.com/raihankhan/notebooklm-go/internal/config
     mode: internal
+
+  # `notebooklm` is the public SDK root (T-P5-1). It hosts the
+  # Client, the functional Options, and the namespace APIs that
+  # land in later phase tickets. Per docs/AGENTS.md rule 5 the
+  # public SDK is mode=internal: every import path must live
+  # inside this module. No third-party dependencies, ever — the
+  # public surface must be light enough for downstream tools to
+  # vendor, and the import graph must remain auditable by the
+  # boundarycheck linter.
+  - path: github.com/raihankhan/notebooklm-go/notebooklm
+    mode: internal
