@@ -1,0 +1,42 @@
+{
+  "cookies": [
+    {
+      "name": "SID",
+      "value": "FAKE_SID_VALUE_NOT_A_REAL_CREDENTIAL",
+      "domain": ".google.com",
+      "path": "/",
+      "expires": 1798761234,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "__Secure-1PSIDTS",
+      "value": "FAKE_PSIDTS_VALUE_NOT_A_REAL_CREDENTIAL",
+      "domain": ".google.com",
+      "path": "/",
+      "expires": 1798761234,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "OSID",
+      "value": "FAKE_OSID_VALUE_NOT_A_REAL_CREDENTIAL",
+      "domain": "notebooklm.google.com",
+      "path": "/",
+      "expires": 1798761234,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": [],
+  "notebooklm": {
+    "version": 1,
+    "account": {
+      "authuser": 2,
+      "email": "fixture@example.invalid"
+    }
+  }
+}

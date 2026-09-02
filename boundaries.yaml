@@ -163,3 +163,24 @@ packages:
   # boundarycheck linter.
   - path: github.com/raihankhan/notebooklm-go/notebooklm
     mode: internal
+
+  # `internal/auth/profile` is the on-disk profile read path
+  # (T-P4-2). It is mode=internal: stdlib + internal/atomicio
+  # (the read primitive) + internal/auth/storage (the lossless
+  # storage_state read layer that carries the Python-CLI
+  # normalization). It deliberately does NOT import
+  # internal/auth/cookiejar — the profile value keeps its own
+  # Cookie shape so the read boundary stays decoupled from the
+  # jar's lock state.
+  - path: github.com/raihankhan/notebooklm-go/internal/auth/profile
+    mode: internal
+
+  # `internal/auth/refresh` is the auth-refresh ladder (T-P4-2).
+  # It is mode=internal: stdlib + internal/auth/cookiejar (the
+  # Jar the L1 rung seeds) + internal/auth/profile (the typed
+  # Reader the L1 rung consumes). No third-party
+  # dependencies; the dispatch table is the closed Ladder
+  # interface, not a string-keyed map, so the boundarycheck
+  # linter can verify the import graph statically.
+  - path: github.com/raihankhan/notebooklm-go/internal/auth/refresh
+    mode: internal
