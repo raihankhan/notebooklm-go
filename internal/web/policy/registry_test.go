@@ -375,6 +375,33 @@ func TestNewRegistry_NilRegistry(t *testing.T) {
 	}
 }
 
+// TestNew_InitializesEntries covers the public New() constructor.
+// A fresh Registry must have a non-nil entries map so the
+// first MustRegister call does not panic with a nil-map
+// assignment. The constructor is what external callers use
+// when they need to allocate a Registry without reaching into
+// the unexported entries field.
+func TestNew_InitializesEntries(t *testing.T) {
+	reg := New()
+	if reg == nil {
+		t.Fatalf("New() returned nil")
+	}
+	if reg.entries == nil {
+		t.Errorf("New().entries is nil; first MustRegister would panic")
+	}
+	// And it is usable end-to-end.
+	MustRegister(reg, wire.MethodListNotebooks, Entry{
+		Class: ClassSafe, Rationale: "x",
+	})
+	sealed, err := NewRegistry([]wire.Method{wire.MethodListNotebooks}, reg)
+	if err != nil {
+		t.Errorf("seal after New() + MustRegister: %v", err)
+	}
+	if sealed == nil {
+		t.Errorf("sealed registry is nil")
+	}
+}
+
 // TestNewRegistry_SealedPanics covers the post-seal re-entry guard.
 func TestNewRegistry_SealedPanics(t *testing.T) {
 	reg := buildFullRegistry(t)

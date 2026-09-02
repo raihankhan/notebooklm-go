@@ -141,6 +141,24 @@ var (
 	ErrProbeRationale = errors.New("policy: probe-then-create entry missing rationale")
 )
 
+// New returns a fresh, unsealed *Registry. The caller populates
+// it via MustRegister and seals it via NewRegistry. The returned
+// Registry is not safe for concurrent use until NewRegistry has
+// returned successfully; the package invariant is "mutate before
+// sealing, read-only after sealing".
+//
+// New exists so external callers (e.g. the transport testbed
+// that builds a per-scenario registry) can avoid reaching into
+// the unexported `entries` field. Without this constructor the
+// only way to allocate a usable Registry would be the zero
+// value, which carries a nil entries map and panics on the first
+// MustRegister call.
+func New() *Registry {
+	return &Registry{
+		entries: make(map[key]Entry),
+	}
+}
+
 // NewRegistry seals reg after verifying that every method in methods[]
 // has at least one registered entry in reg. It also calls Validate
 // (which rejects probe-then-create entries with empty Rationale).

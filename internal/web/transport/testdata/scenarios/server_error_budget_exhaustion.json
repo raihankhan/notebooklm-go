@@ -1,0 +1,9 @@
+{
+  "scenario": "server_error_budget_exhaustion",
+  "description": "Server emits 500 every time. Retry middleware exhausts its 5-attempt cap and surfaces the final 500.",
+  "method": "MethodListNotebooks",
+  "variant": "",
+  "expected_class": "safe",
+  "expected_status": 500,
+  "expected_attempts": 5
+}

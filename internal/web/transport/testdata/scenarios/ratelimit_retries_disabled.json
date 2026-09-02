@@ -1,0 +1,9 @@
+{
+  "scenario": "ratelimit_retries_disabled",
+  "description": "Idempotency class is unsafe-mutation; server emits 429. The idempotency middleware must disable retries, so a single 429 surfaces.",
+  "method": "MethodCreateNotebook",
+  "variant": "",
+  "expected_class": "unsafe-mutation",
+  "expected_status": 429,
+  "expected_attempts": 1
+}

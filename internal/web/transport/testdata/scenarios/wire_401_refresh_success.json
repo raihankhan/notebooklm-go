@@ -1,0 +1,10 @@
+{
+  "scenario": "wire_401_refresh_success",
+  "description": "Server emits 401 once; the terminal middleware must consult the refresh budget, take it once, run the auth-refresh callback, rebuild the envelope from the post-refresh snapshot, and retry — succeeding on the second POST.",
+  "method": "MethodListNotebooks",
+  "variant": "",
+  "expected_class": "safe",
+  "expected_status": 200,
+  "expected_attempts": 2,
+  "expected_refresh_count": 1
+}

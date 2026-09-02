@@ -1,0 +1,10 @@
+{
+  "scenario": "connect_timeout",
+  "description": "Server is unreachable (TCP connection never accepted). The chain must surface a dial-timeout error without retrying because retries are disabled on connect failures (the connection was never established; a retry would just dial again).",
+  "method": "MethodListNotebooks",
+  "variant": "",
+  "expected_class": "safe",
+  "expected_status": 0,
+  "expected_attempts": 1,
+  "expected_error": "dial-timeout"
+}
