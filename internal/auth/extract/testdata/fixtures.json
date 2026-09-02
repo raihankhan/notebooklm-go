@@ -1,0 +1,114 @@
+[
+  {
+    "name": "canonical_app_page",
+    "double_quoted": "<html><head><script>var WIZ_global_data = {\"SNlM0e\":\"FAKE_CSRF_NOT_A_REAL_CREDENTIAL\",\"FdrFJe\":\"FAKE_SESSION_NOT_A_REAL_CREDENTIAL\",\"yIU9Ub\":\"somevalue\"};</script></head><body></body></html>",
+    "single_quoted": "<html><head><script>var WIZ_global_data = {'SNlM0e':'FAKE_CSRF_NOT_A_REAL_CREDENTIAL','FdrFJe':'FAKE_SESSION_NOT_A_REAL_CREDENTIAL'};</script></head><body></body></html>",
+    "html_escaped": "<html><head><script>var WIZ_global_data = {&quot;SNlM0e&quot;:&quot;FAKE_CSRF_NOT_A_REAL_CREDENTIAL&quot;,&quot;FdrFJe&quot;:&quot;FAKE_SESSION_NOT_A_REAL_CREDENTIAL&quot;};</script></head><body></body></html>",
+    "expect_csrf": "FAKE_CSRF_NOT_A_REAL_CREDENTIAL",
+    "expect_session": "FAKE_SESSION_NOT_A_REAL_CREDENTIAL"
+  },
+  {
+    "name": "minimal_double_quoted_only",
+    "double_quoted": "{\"SNlM0e\":\"cs1\",\"FdrFJe\":\"se1\"}",
+    "single_quoted": "{'SNlM0e':'cs1','FdrFJe':'se1'}",
+    "html_escaped": "{&quot;SNlM0e&quot;:&quot;cs1&quot;,&quot;FdrFJe&quot;:&quot;se1&quot;}",
+    "expect_csrf": "cs1",
+    "expect_session": "se1"
+  },
+  {
+    "name": "tokens_with_colon_whitespace",
+    "double_quoted": "{\"SNlM0e\" : \"cs2\", \"FdrFJe\"  :  \"se2\"}",
+    "single_quoted": "{'SNlM0e' : 'cs2', 'FdrFJe'  :  'se2'}",
+    "html_escaped": "{&quot;SNlM0e&quot; : &quot;cs2&quot;, &quot;FdrFJe&quot;  :  &quot;se2&quot;}",
+    "expect_csrf": "cs2",
+    "expect_session": "se2"
+  },
+  {
+    "name": "tokens_among_other_wiz_fields",
+    "double_quoted": "{\"yIU9Ub\":\"a\",\"SNlM0e\":\"cs4\",\"FdrFJe\":\"se4\",\"yOC9L\":\"b\"}",
+    "single_quoted": "{'yIU9Ub':'a','SNlM0e':'cs4','FdrFJe':'se4','yOC9L':'b'}",
+    "html_escaped": "{&quot;yIU9Ub&quot;:&quot;a&quot;,&quot;SNlM0e&quot;:&quot;cs4&quot;,&quot;FdrFJe&quot;:&quot;se4&quot;,&quot;yOC9L&quot;:&quot;b&quot;}",
+    "expect_csrf": "cs4",
+    "expect_session": "se4"
+  },
+  {
+    "name": "tokens_with_other_entity_in_value",
+    "double_quoted": "{\"SNlM0e\":\"cs5\",\"FdrFJe\":\"se5\"}",
+    "single_quoted": "{'SNlM0e':'cs5','FdrFJe':'se5'}",
+    "html_escaped": "{&quot;SNlM0e&quot;:&quot;cs5&quot;,&quot;FdrFJe&quot;:&quot;se5&quot;}",
+    "expect_csrf": "cs5",
+    "expect_session": "se5"
+  },
+  {
+    "name": "tokens_with_backslash_in_value",
+    "double_quoted": "{\"SNlM0e\":\"cs\\\\val\",\"FdrFJe\":\"se6\"}",
+    "single_quoted": "{'SNlM0e':'cs\\\\val','FdrFJe':'se6'}",
+    "html_escaped": "{&quot;SNlM0e&quot;:&quot;cs\\\\val&quot;,&quot;FdrFJe&quot;:&quot;se6&quot;}",
+    "expect_csrf": "cs\\\\val",
+    "expect_session": "se6"
+  },
+  {
+    "name": "tokens_inside_full_html_page",
+    "double_quoted": "<!DOCTYPE html><html lang=\"en\"><head><title>NotebookLM</title><script>window.WIZ_global_data = {\"SNlM0e\":\"FAKE_CSRF_FULL_PAGE\",\"FdrFJe\":\"FAKE_SESS_FULL_PAGE\",\"ytlvBu\":\"...\",\"PDrkQb\":\"abcdef\"};</script></head><body class=\"notebooklm-app\"><div id=\"root\"></div></body></html>",
+    "single_quoted": "<!DOCTYPE html><html lang='en'><head><title>NotebookLM</title><script>window.WIZ_global_data = {'SNlM0e':'FAKE_CSRF_FULL_PAGE','FdrFJe':'FAKE_SESS_FULL_PAGE'};</script></head><body></body></html>",
+    "html_escaped": "<!DOCTYPE html><html lang=\"en\"><head><title>NotebookLM</title><script>window.WIZ_global_data = {&quot;SNlM0e&quot;:&quot;FAKE_CSRF_FULL_PAGE&quot;,&quot;FdrFJe&quot;:&quot;FAKE_SESS_FULL_PAGE&quot;};</script></head><body></body></html>",
+    "expect_csrf": "FAKE_CSRF_FULL_PAGE",
+    "expect_session": "FAKE_SESS_FULL_PAGE"
+  },
+  {
+    "name": "tokens_with_leading_array_context",
+    "double_quoted": "[1,2,{\"SNlM0e\":\"cs7\",\"FdrFJe\":\"se7\"},4]",
+    "single_quoted": "[1,2,{'SNlM0e':'cs7','FdrFJe':'se7'},4]",
+    "html_escaped": "[1,2,{&quot;SNlM0e&quot;:&quot;cs7&quot;,&quot;FdrFJe&quot;:&quot;se7&quot;},4]",
+    "expect_csrf": "cs7",
+    "expect_session": "se7"
+  },
+  {
+    "name": "tokens_with_realistic_long_values",
+    "double_quoted": "{\"SNlM0e\":\"AF1_Qip_fn-realistic-shape-csrf-token\",\"FdrFJe\":\"1234567890123456789\"}",
+    "single_quoted": "{'SNlM0e':'AF1_Qip_fn-realistic-shape-csrf-token','FdrFJe':'1234567890123456789'}",
+    "html_escaped": "{&quot;SNlM0e&quot;:&quot;AF1_Qip_fn-realistic-shape-csrf-token&quot;,&quot;FdrFJe&quot;:&quot;1234567890123456789&quot;}",
+    "expect_csrf": "AF1_Qip_fn-realistic-shape-csrf-token",
+    "expect_session": "1234567890123456789"
+  },
+  {
+    "name": "tokens_with_trailing_comma_in_object",
+    "double_quoted": "{\"yIU9Ub\":\"x\",\"SNlM0e\":\"cs9\",\"FdrFJe\":\"se9\",}",
+    "single_quoted": "{'yIU9Ub':'x','SNlM0e':'cs9','FdrFJe':'se9',}",
+    "html_escaped": "{&quot;yIU9Ub&quot;:&quot;x&quot;,&quot;SNlM0e&quot;:&quot;cs9&quot;,&quot;FdrFJe&quot;:&quot;se9&quot;,}",
+    "expect_csrf": "cs9",
+    "expect_session": "se9"
+  },
+  {
+    "name": "tokens_after_long_wiz_object",
+    "double_quoted": "{\"a1\":\"x\",\"a2\":\"y\",\"a3\":\"z\",\"a4\":\"w\",\"SNlM0e\":\"cs10\",\"FdrFJe\":\"se10\"}",
+    "single_quoted": "{'a1':'x','a2':'y','a3':'z','a4':'w','SNlM0e':'cs10','FdrFJe':'se10'}",
+    "html_escaped": "{&quot;a1&quot;:&quot;x&quot;,&quot;a2&quot;:&quot;y&quot;,&quot;a3&quot;:&quot;z&quot;,&quot;a4&quot;:&quot;w&quot;,&quot;SNlM0e&quot;:&quot;cs10&quot;,&quot;FdrFJe&quot;:&quot;se10&quot;}",
+    "expect_csrf": "cs10",
+    "expect_session": "se10"
+  },
+  {
+    "name": "tokens_inside_other_wiz_array",
+    "double_quoted": "var x={\"a\":[1,{\"SNlM0e\":\"cs11\",\"FdrFJe\":\"se11\"}],\"b\":2};",
+    "single_quoted": "var x={'a':[1,{'SNlM0e':'cs11','FdrFJe':'se11'}],'b':2};",
+    "html_escaped": "var x={&quot;a&quot;:[1,{&quot;SNlM0e&quot;:&quot;cs11&quot;,&quot;FdrFJe&quot;:&quot;se11&quot;}],&quot;b&quot;:2};",
+    "expect_csrf": "cs11",
+    "expect_session": "se11"
+  },
+  {
+    "name": "sign_in_page_shape_for_regression",
+    "double_quoted": "<html><head><script>var WIZ_global_data = {\"SNlM0e\":\"ALX_FAKE_SIGNIN_CSRF:1785760591977\",\"FdrFJe\":\"0123456789012345678\"};</script></head><body>Sign in to continue to NotebookLM</body></html>",
+    "single_quoted": "<html><head><script>var WIZ_global_data = {'SNlM0e':'ALX_FAKE_SIGNIN_CSRF:1785760591977','FdrFJe':'0123456789012345678'};</script></head><body>Sign in to continue to NotebookLM</body></html>",
+    "html_escaped": "<html><head><script>var WIZ_global_data = {&quot;SNlM0e&quot;:&quot;ALX_FAKE_SIGNIN_CSRF:1785760591977&quot;,&quot;FdrFJe&quot;:&quot;0123456789012345678&quot;};</script></head><body>Sign in to continue to NotebookLM</body></html>",
+    "expect_csrf": "ALX_FAKE_SIGNIN_CSRF:1785760591977",
+    "expect_session": "0123456789012345678"
+  },
+  {
+    "name": "tokens_in_minified_single_line",
+    "double_quoted": "{\"foo\":\"bar\",\"SNlM0e\":\"cs13\",\"baz\":\"qux\",\"FdrFJe\":\"se13\"}",
+    "single_quoted": "{'foo':'bar','SNlM0e':'cs13','baz':'qux','FdrFJe':'se13'}",
+    "html_escaped": "{&quot;foo&quot;:&quot;bar&quot;,&quot;SNlM0e&quot;:&quot;cs13&quot;,&quot;baz&quot;:&quot;qux&quot;,&quot;FdrFJe&quot;:&quot;se13&quot;}",
+    "expect_csrf": "cs13",
+    "expect_session": "se13"
+  }
+]
