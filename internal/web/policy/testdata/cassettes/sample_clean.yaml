@@ -1,0 +1,20 @@
+# Sample clean cassette — every credential placeholder below is the
+# SCRUBBED sentinel the harness emits. This file is checked in so
+# TestNoCredentialInCassettes has something concrete to walk on
+# before any live recording lands.
+---
+interactions:
+  - request:
+      method: POST
+      url: https://notebooklm.google.com/_/LabsTailwindUi/data/batchexecute?rpcids=CCqFvf&f.sid=SCRUBBED&at=SCRUBBED
+      headers:
+        Cookie: SCRUBBED
+        Content-Type: application/x-www-form-urlencoded
+      body: 'f.req=%5B%5B%22CCqFvf%22%2C%5B%22nb1%22%5D%5D%5D'
+    response:
+      code: 200
+      headers:
+        Content-Type: application/json
+      body: |
+        [["wrb.fr","CCqFvf",null,null,null,null,"A"]]
+        7

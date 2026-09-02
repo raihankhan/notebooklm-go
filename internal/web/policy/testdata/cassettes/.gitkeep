@@ -1,0 +1,7 @@
+# Placeholder so the empty testdata/cassettes/ directory is tracked.
+#
+# This directory holds the committed cassette files that the policy
+# cassette tests replay against. Each file is recorded once against
+# live Google, scrubbed on capture by the AfterCaptureHook, and
+# re-checked at PR review time by TestNoCredentialInCassettes.
+#
