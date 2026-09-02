@@ -332,11 +332,11 @@ func unimplementedError(method wire.Method, recovered any) error {
 // The wire envelope does not currently paginate; HasMore is
 // always false today. The fields stay on the public type so a
 // future paged listing can land without churn.
-func (a *NotebooksAPI) List(ctx context.Context, opts ...NotebooksOption) (Page, error) {
+func (a *NotebooksAPI) List(ctx context.Context, opts ...NotebooksOption) (Page[Notebook], error) {
 	o := resolveOptions(opts)
 	raw, err := a.call(ctx, wire.MethodListNotebooks, params.BuildList())
 	if err != nil {
-		return Page{}, err
+		return Page[Notebook]{}, err
 	}
 	return a.pageFromList(raw, o.maxItems)
 }
@@ -629,11 +629,11 @@ func (a *NotebooksAPI) RemoveCollaborator(ctx context.Context, id, email string,
 // Port of `_notebooks.py::NotebooksAPI.recently_viewed`. The
 // Python original exposes a method by this name even though
 // the wire has no dedicated RPC; the Go port mirrors.
-func (a *NotebooksAPI) GetRecent(ctx context.Context, opts ...NotebooksOption) (Page, error) {
+func (a *NotebooksAPI) GetRecent(ctx context.Context, opts ...NotebooksOption) (Page[Notebook], error) {
 	o := resolveOptions(opts)
 	raw, err := a.call(ctx, wire.MethodListNotebooks, params.BuildGetRecent())
 	if err != nil {
-		return Page{}, err
+		return Page[Notebook]{}, err
 	}
 	return a.pageFromList(raw, o.maxItems)
 }
@@ -649,7 +649,7 @@ func (a *NotebooksAPI) GetRecent(ctx context.Context, opts ...NotebooksOption) (
 // but does not yet expose a dedicated list endpoint. When the
 // Python original pins a builder, T-P5-5 or a later ticket
 // ports it.
-func (a *NotebooksAPI) GetStarred(ctx context.Context, opts ...NotebooksOption) (page Page, err error) {
+func (a *NotebooksAPI) GetStarred(ctx context.Context, opts ...NotebooksOption) (page Page[Notebook], err error) {
 	// params.BuildGetStarred panics with a "TODO" marker until
 	// the Python original pins a list_starred builder. The
 	// defer-recover here catches the panic at the SDK boundary
@@ -661,7 +661,7 @@ func (a *NotebooksAPI) GetStarred(ctx context.Context, opts ...NotebooksOption) 
 	}()
 	raw, callErr := a.call(ctx, wire.MethodListNotebooks, params.BuildGetStarred())
 	if callErr != nil {
-		return Page{}, callErr
+		return Page[Notebook]{}, callErr
 	}
 	o := resolveOptions(opts)
 	return a.pageFromList(raw, o.maxItems)
@@ -678,7 +678,7 @@ func (a *NotebooksAPI) GetStarred(ctx context.Context, opts ...NotebooksOption) 
 // slot argument that the live probe has not yet pinned. We
 // deliberately do NOT call params.BuildList here — a silent
 // alias would mask the missing RPC.
-func (a *NotebooksAPI) GetSharedWithMe(ctx context.Context, opts ...NotebooksOption) (page Page, err error) {
+func (a *NotebooksAPI) GetSharedWithMe(ctx context.Context, opts ...NotebooksOption) (page Page[Notebook], err error) {
 	// See GetStarred for the panic-recover rationale. The
 	// params builder is a stub until T-P5-5 (or later) ports
 	// the Python original.
@@ -689,7 +689,7 @@ func (a *NotebooksAPI) GetSharedWithMe(ctx context.Context, opts ...NotebooksOpt
 	}()
 	raw, callErr := a.call(ctx, wire.MethodListNotebooks, params.BuildGetSharedWithMe())
 	if callErr != nil {
-		return Page{}, callErr
+		return Page[Notebook]{}, callErr
 	}
 	o := resolveOptions(opts)
 	return a.pageFromList(raw, o.maxItems)
@@ -703,9 +703,9 @@ func (a *NotebooksAPI) GetSharedWithMe(ctx context.Context, opts ...NotebooksOpt
 //
 // The `project_id` column exists on every row but no
 // dedicated list-by-project endpoint has been captured.
-func (a *NotebooksAPI) GetByProject(ctx context.Context, projectID string, opts ...NotebooksOption) (page Page, err error) {
+func (a *NotebooksAPI) GetByProject(ctx context.Context, projectID string, opts ...NotebooksOption) (page Page[Notebook], err error) {
 	if projectID == "" {
-		return Page{}, apperrors.Wrap(apperrors.CodeValidationError,
+		return Page[Notebook]{}, apperrors.Wrap(apperrors.CodeValidationError,
 			errors.New("notebooks.GetByProject: projectID must not be empty"))
 	}
 	// See GetStarred for the panic-recover rationale.
@@ -716,7 +716,7 @@ func (a *NotebooksAPI) GetByProject(ctx context.Context, projectID string, opts 
 	}()
 	raw, callErr := a.call(ctx, wire.MethodListNotebooks, params.BuildGetByProject(projectID))
 	if callErr != nil {
-		return Page{}, callErr
+		return Page[Notebook]{}, callErr
 	}
 	o := resolveOptions(opts)
 	return a.pageFromList(raw, o.maxItems)
@@ -733,26 +733,26 @@ func (a *NotebooksAPI) GetByProject(ctx context.Context, projectID string, opts 
 // "no rows" page returns. A malformed row surfaces a typed
 // CodeNotebookLMError — the wire shape is the contract and a
 // silently-skipped row would mask schema drift.
-func (a *NotebooksAPI) pageFromList(raw []any, maxItems int) (Page, error) {
+func (a *NotebooksAPI) pageFromList(raw []any, maxItems int) (Page[Notebook], error) {
 	if len(raw) == 0 {
-		return Page{}, nil
+		return Page[Notebook]{}, nil
 	}
 	rows, ok := raw[0].([]any)
 	if !ok {
-		return Page{}, nil
+		return Page[Notebook]{}, nil
 	}
 	rowsOut := make([]Notebook, 0, len(rows))
 	for _, row := range rows {
 		nb, err := a.decodeRow(row)
 		if err != nil {
-			return Page{}, err
+			return Page[Notebook]{}, err
 		}
 		rowsOut = append(rowsOut, nb)
 	}
 	if maxItems > 0 && len(rowsOut) > maxItems {
 		rowsOut = rowsOut[:maxItems]
 	}
-	return Page{Items: rowsOut}, nil
+	return Page[Notebook]{Items: rowsOut}, nil
 }
 
 // notebookFromEnvelope converts a single-row RPC envelope (GET,

@@ -187,19 +187,22 @@ const (
 )
 
 // Page is the typed envelope the listing methods (List, GetRecent,
-// GetStarred, GetSharedWithMe, GetByProject) return.
+// GetStarred, GetSharedWithMe, GetByProject, SourcesAPI.List)
+// return.
 //
-// Notebooks do not currently page server-side — the live
-// ListRecentlyViewedProjects endpoint returns the whole list in
-// one envelope — but the type exposes NextOffset / HasMore so a
-// future paged listing can land without renaming call sites.
+// Notebooks / sources do not currently page server-side — the
+// live ListRecentlyViewedProjects / GetNotebook endpoints return
+// the whole list in one envelope — but the type exposes
+// NextOffset / HasMore so a future paged listing can land
+// without renaming call sites.
 //
-// `Page` uses a concrete `[]Notebook` rather than generics: every
-// existing envelope in this module is `[]Notebook`-shaped, and the
-// concrete slice keeps the call sites readable.
-type Page struct {
+// `Page` is generic over the row type so NotebooksAPI.List can
+// return `Page[Notebook]` and SourcesAPI.List can return
+// `Page[Source]` without aliasing or interface tricks. The
+// concrete-typed `Items` slot keeps the call sites readable.
+type Page[T any] struct {
 	// Items is the slice of decoded rows in the page.
-	Items []Notebook
+	Items []T
 
 	// NextOffset is the opaque continuation token returned by the
 	// backend. Empty when the current page is terminal.

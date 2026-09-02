@@ -776,7 +776,7 @@ func TestNotebooks_WithMaxItems_Zero(t *testing.T) {
 // future rename (or a future paged-listing field) surfaces as
 // a test diff rather than a silent API change.
 func TestNotebooks_PageShape(t *testing.T) {
-	var p Page
+	var p Page[Notebook]
 	_ = p.Items
 	_ = p.NextOffset
 	_ = p.HasMore
