@@ -1,0 +1,255 @@
+// Package sources contains the higher-level "business logic"
+// wrappers that sit between the SDK root (notebooklm.SourcesAPI)
+// and the byte builders (internal/web/params) + row adapters
+// (internal/web/rows).
+//
+// Every exported function takes a Caller — the minimal interface
+// the SDK exposes for dispatching one RPC — rather than reaching
+// for the concrete client type. That way the MCP / REST / CLI
+// adapters can each construct their own Caller and exercise these
+// wrappers without pulling in the public SDK surface (which would
+// re-introduce the import cycle the boundary rules forbid).
+//
+// Per AGENTS.md rule 5 (boundary table) and rule 3 (one JSON
+// encoder) this package imports wire (encode + decode) and the
+// params/rows siblings, never encoding/json. The transport
+// layer's Caller interface hides the concrete RPC plumbing behind
+// a single method.
+//
+// T-P6-1 ships the minimum-viable surface: List (decodes a
+// GET_NOTEBOOK source list) and AddURL (issues ADD_SOURCE for the
+// URL branch). The rest of the source lifecycle (AddText,
+// AddDrive, AddYouTube, Delete, Rename, Refresh, …) lands in
+// later phase tickets as additional exported functions on this
+// package.
+package sources
+
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/raihankhan/notebooklm-go/internal/web/params"
+	"github.com/raihankhan/notebooklm-go/internal/web/rows"
+	"github.com/raihankhan/notebooklm-go/internal/web/wire"
+)
+
+// Caller is the minimal interface this package needs from the SDK.
+//
+// One method per RPC. Implementations live in `notebooklm` (the
+// public SDK root) and the test fixtures; the interface boundary
+// here is the seam that lets `notebooklm.SourcesAPI` drive every
+// feature without the feature package importing the SDK in
+// return.
+//
+// Every method:
+//
+//   - Returns the wire-decoded payload (`any`, after the
+//     `wire.DecodeResponse` envelope-unwrap) so callers can run the
+//     rows.Decoder on it.
+//   - Returns an error the caller should NOT match against
+//     `wire.ErrDecoding` directly — the rows / features layers
+//     re-wrap drift errors with their own typed vocabulary.
+//
+// `method` is the obfuscated id (`wire.Method`) the SDK resolved
+// for the call; the features layer never reads it (it is opaque to
+// row decoding), but the parameter keeps the contract explicit so
+// a future schema-drift diagnostic has the method id available
+// without an extra round-trip.
+type Caller interface {
+	Call(ctx context.Context, method wire.Method, params any, sourcePath string, allowNull bool) (any, error)
+}
+
+// List returns the typed source list for one notebook, in
+// backend-defined order. The backing RPC is `GetNotebook`
+// (`rLM1Ne`) — see `_web/sources/listing.py::SourceLister.list`
+// for the Python original.
+//
+// The wire envelope is a single-element wrapper whose first
+// element is the row list (`[[row1, row2, ...]]`); we unwrap
+// through wire.At so a malformed envelope surfaces a
+// *wire.ShapeDriftError rather than fabricating empty-id sources
+// (the documented failure mode in
+// `_web/sources/listing.py::list`).
+//
+// The source list lives at `notebook[0][1]` — the standard
+// GET_NOTEBOOK envelope unwraps `notebook → nb_info → sources`.
+// Each row is decoded via `rows.DecodeSource`, which handles the
+// three id-envelope layouts (`[id]`, `[None, True, [id]]`, bare
+// string) and the type / status enums.
+func List(ctx context.Context, c Caller, notebookID string) ([]rows.Source, error) {
+	if c == nil {
+		return nil, errors.New("features.sources.List: caller is nil")
+	}
+	sourcePath := "/notebook/" + notebookID
+	raw, err := c.Call(ctx, wire.MethodGetNotebook, params.BuildListSources(notebookID), sourcePath, false)
+	if err != nil {
+		return nil, fmt.Errorf("features.sources.List: %w", err)
+	}
+	return decodeSourceRows(raw)
+}
+
+// AddURL adds a URL source to a notebook and returns the typed
+// view of the freshly added source. The backing RPC is `AddSources`
+// (`izAoDd`) — see `_web/sources/add.py::SourceAddService
+// .add_url_source` for the Python original.
+//
+// The wire shape is the nested wrapper (#1546 wire migration): a
+// fresh template block at slot 2, with the URL riding at
+// source-spec slot 2. The trailing literal `1` at the end of the
+// spec is the source-type code. Returns the single decoded source
+// row from the response envelope.
+//
+// allowNull is set to true because the backend occasionally
+// returns a null result on a successful add (the documented
+// "silent commit" failure mode — see
+// `_web/sources/add.py::SourceAddService.add_url`).
+func AddURL(ctx context.Context, c Caller, notebookID, url string) (rows.Source, error) {
+	if c == nil {
+		return rows.Source{}, errors.New("features.sources.AddURL: caller is nil")
+	}
+	sourcePath := "/notebook/" + notebookID
+	raw, err := c.Call(ctx, wire.MethodAddSource, params.BuildAddSourceURL(notebookID, url), sourcePath, true)
+	if err != nil {
+		return rows.Source{}, fmt.Errorf("features.sources.AddURL: %w", err)
+	}
+	return decodeAddedSourceRow(raw)
+}
+
+// decodeSourceRows unwraps a GET_NOTEBOOK source-list envelope into
+// a slice of typed Source rows. The envelope shape is
+// `[[row1, row2, ...]]` (per `_web/sources/listing.py::list`); a
+// falsy / non-list payload degrades to `nil` (the documented "no
+// sources" contract); a truthy payload that does not match the
+// envelope is schema drift and surfaces a *wire.ShapeDriftError.
+//
+// A genuinely empty notebook elides the sources slot (`None`
+// instead of an empty list). This is a valid empty state, NOT a
+// malformed response, so return `nil` without raising even under
+// strict-decode — mirrors `_web/sources/listing.py::_extract_
+// sources_list` line 195-200 (issue #1159 reserves the empty list
+// for the genuinely-empty case).
+func decodeSourceRows(raw any) ([]rows.Source, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	outer, ok := raw.([]any)
+	if !ok {
+		return nil, &wire.ShapeDriftError{
+			Path:    "",
+			Method:  string(wire.MethodGetNotebook),
+			Reason:  "not_a_list",
+			GotType: typeName(raw),
+		}
+	}
+	if len(outer) == 0 {
+		return nil, nil
+	}
+	// GET_NOTEBOOK envelope: [nb_info, ...]. nb_info[0] is the
+	// title, nb_info[1] is the sources list. We descend one level
+	// deeper than `_web/sources/listing.py` (which starts from the
+	// already-unwrapped `notebook` payload) because the wire layer
+	// hands us the full GET_NOTEBOOK response, not the unwrapped
+	// nb_info.
+	nbInfo, err := wire.At(outer, 0)
+	if err != nil {
+		return nil, err
+	}
+	nbArr, ok := nbInfo.([]any)
+	if !ok {
+		// `outer[0]` is null = "no notebook info". Treat as empty.
+		if nbInfo == nil {
+			return nil, nil
+		}
+		return nil, &wire.ShapeDriftError{
+			Path:    "[0]",
+			Method:  string(wire.MethodGetNotebook),
+			Reason:  "not_a_list",
+			GotType: typeName(nbInfo),
+		}
+	}
+	// Per `_web/sources/listing.py::_extract_sources_list` line
+	// 178-183: a malformed `nb_info` (non-list OR len <= 1) is a
+	// genuine "structure changed" error.
+	if len(nbArr) <= 1 {
+		return nil, nil
+	}
+	// nb_info[1] is the sources list. A genuinely empty notebook
+	// elides this slot — see the issue #1159 rationale in the
+	// caller docstring.
+	rawList := nbArr[1]
+	if rawList == nil {
+		return nil, nil
+	}
+	list, ok := rawList.([]any)
+	if !ok {
+		return nil, &wire.ShapeDriftError{
+			Path:    "[0][1]",
+			Method:  string(wire.MethodGetNotebook),
+			Reason:  "not_a_list",
+			GotType: typeName(rawList),
+		}
+	}
+	out := make([]rows.Source, 0, len(list))
+	for i, row := range list {
+		s, err := rows.DecodeSource(row)
+		if err != nil {
+			return nil, fmt.Errorf("features.sources.decodeSourceRows[%d]: %w", i, err)
+		}
+		out = append(out, s)
+	}
+	return out, nil
+}
+
+// decodeAddedSourceRow decodes an ADD_SOURCE response envelope into
+// a typed Source row. The envelope is `[[[id], title, metadata,
+// ...]]` — the medium-nested shape
+// `_web/rows/sources.py::SourceRowShape.MEDIUM_NESTED` describes.
+// A genuinely empty / null response degrades to a zero Source
+// rather than raising (the documented "silent commit" failure mode
+// for `AddSources`); a present-but-wrong-typed envelope surfaces a
+// *wire.ShapeDriftError.
+func decodeAddedSourceRow(raw any) (rows.Source, error) {
+	if raw == nil {
+		return rows.Source{}, nil
+	}
+	outer, ok := raw.([]any)
+	if !ok || len(outer) == 0 {
+		return rows.Source{}, nil
+	}
+	// Medium-nested shape: outer[0] is the entry row; the entry
+	// itself is `[id_envelope, title, metadata, ...]`. We pass the
+	// entry directly to rows.DecodeSource which handles the
+	// id-envelope variants.
+	entry, err := wire.At(outer, 0)
+	if err != nil {
+		return rows.Source{}, err
+	}
+	if entry == nil {
+		return rows.Source{}, nil
+	}
+	return rows.DecodeSource(entry)
+}
+
+// typeName is the small helper that gives the
+// *ShapeDriftError.GotType field a stable format. Mirrors
+// `typeName` in `features/notebooks.go` so the diagnostic surface
+// is uniform across the namespaces.
+func typeName(v any) string {
+	if v == nil {
+		return "nil"
+	}
+	switch v.(type) {
+	case []any:
+		return "[]any"
+	case map[string]any:
+		return "map[string]any"
+	case string:
+		return "string"
+	case bool:
+		return "bool"
+	case float64:
+		return "float64"
+	}
+	return fmt.Sprintf("%T", v)
+}

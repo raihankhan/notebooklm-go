@@ -228,3 +228,10 @@ packages:
   # linter can verify the import graph statically.
   - path: github.com/raihankhan/notebooklm-go/internal/auth/refresh
     mode: internal
+
+  # `internal/web/params/sources` and `internal/web/rows/sources` mirror
+  # the T-P5-4 notebooks layout: each is mode=internal (stdlib + wire).
+  - path: github.com/raihankhan/notebooklm-go/internal/web/params/sources
+    mode: internal
+  - path: github.com/raihankhan/notebooklm-go/internal/web/rows/sources
+    mode: internal

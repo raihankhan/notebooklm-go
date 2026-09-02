@@ -386,7 +386,7 @@ func (c *Client) resolveAuto(ctx context.Context, query string, o ResolveOptions
 //
 // Errors are returned unchanged; the resolver wraps them with the
 // canonical CodeNotebookLMError tag through NotebooksAPI.call.
-func (c *Client) listForResolve(ctx context.Context, projectID string) (Page, error) {
+func (c *Client) listForResolve(ctx context.Context, projectID string) (Page[Notebook], error) {
 	if projectID != "" {
 		return c.Notebooks().GetByProject(ctx, projectID)
 	}
