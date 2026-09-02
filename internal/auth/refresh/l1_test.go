@@ -28,7 +28,11 @@ import (
 // Tokens populated with the in-band account identity. This is the
 // load-bearing test for AC1.
 func TestL1Success(t *testing.T) {
-	exp := time.Date(2026, 9, 2, 12, 0, 0, 0, time.UTC)
+	// Use a far-future expiration so the test does not expire as
+	// wall-clock time advances past 2026-09-02. A session cookie
+	// (Expires == time.Time{}) is also acceptable, but a pinned
+	// far-future value documents intent.
+	exp := time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC)
 	profileData := profile.Profile{
 		Backend: profile.BackendStorageFile,
 		Account: profile.Account{AuthUser: 2, Email: "alice@example.invalid"},
