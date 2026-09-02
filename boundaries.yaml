@@ -7,23 +7,46 @@
 # Schema:
 #   schema_version: integer; bump when the field set changes.
 #   packages: list of rule entries, one per governed package.
-#     path:  fully-qualified Go import path of the governed package.
-#     mode:  "internal" — every import path must start with the module's
-#                          own root (i.e. only sibling internal/* packages).
-#            "stdlib"    — every import must be a Go standard-library
-#                          package; nothing else is allowed.
+#     path:     fully-qualified Go import path of the governed package.
+#     mode:     "internal" — every import path must start with the module's
+#                            own root (i.e. only sibling internal/* packages).
+#               "stdlib"    — every import must be a Go standard-library
+#                            package; nothing else is allowed.
+#               "external"  — every import must be stdlib OR match an
+#                            entry under the `external` allowlist. Used by
+#                            adapters that must talk to a third-party TUI or
+#                            command-tree library (e.g. internal/cli imports
+#                            Cobra + lipgloss), without giving them free
+#                            rein over the module's import surface.
+#     external: list of fully-qualified third-party import-path prefixes
+#               allowed under mode=external. Glob-style "*" suffix matches
+#               any subpath (e.g. "github.com/foo/v2/*" allows any child
+#               package).
 #
 # A package that does not yet exist on disk is silently skipped (we cannot
 # lint what has not been written). This keeps `make boundarycheck` green
 # during the early phases when only some packages have been scaffolded.
-schema_version: 1
+schema_version: 2
 
 packages:
   - path: github.com/raihankhan/notebooklm-go/internal/app
     mode: internal
 
+  # internal/cli — see the "external" mode definition above. The CLI adapter
+  # is the only layer that talks to a TUI library (github.com/charmbracelet/
+  # lipgloss for the CP AXTRA theme) and the only layer that talks to a
+  # command-tree library (github.com/spf13/cobra for the root command,
+  # completion generators, and the grouped help rendering). The transport
+  # (internal/web), the public SDK (notebooklm), and the application
+  # layer (internal/app) remain mode=internal and never reach Cobra.
   - path: github.com/raihankhan/notebooklm-go/internal/cli
-    mode: internal
+    mode: external
+    external:
+      - github.com/charmbracelet/lipgloss
+      - github.com/charmbracelet/lipgloss/*
+      - github.com/muesli/termenv
+      - github.com/spf13/cobra
+      - github.com/spf13/pflag
 
   - path: github.com/raihankhan/notebooklm-go/internal/mcpsrv
     mode: internal

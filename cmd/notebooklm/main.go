@@ -1,13 +1,18 @@
 // Command notebooklm is the entry point for github.com/raihankhan/notebooklm-go.
 //
-// In Phase 0 the binary is a placeholder that prints its version and exits.
-// Real flags and subcommands land in later phases (see AGENTIC_LOOP plan).
+// The binary is wired to internal/cli in T-P5-7 (this file replaces
+// the version-only placeholder that lived here through Phase 0-4).
+// main.go owns the lifecycle; every command, flag, and error path
+// lives under internal/cli so main.go stays a single function.
 package main
 
-import "fmt"
+import (
+	"context"
+	"os"
 
-const version = "0.1.0-dev"
+	"github.com/raihankhan/notebooklm-go/internal/cli"
+)
 
 func main() {
-	fmt.Println("notebooklm-go", version)
+	os.Exit(cli.ExecuteContext(context.Background()))
 }
