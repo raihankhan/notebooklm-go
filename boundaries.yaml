@@ -163,3 +163,53 @@ packages:
   # boundarycheck linter.
   - path: github.com/raihankhan/notebooklm-go/notebooklm
     mode: internal
+
+  # `internal/auth` is the Tokens bundle + LoadFromStorage pipeline
+  # (T-P4-1). The package is mode=internal: stdlib +
+  # internal/redact (so String() / LogValue() route through the
+  # credential primitive) + the four sibling packages this
+  # pipeline composes (internal/auth/storage for the source
+  # resolver, internal/auth/cookiejar for the Jar the transport
+  # kernel mounts, internal/auth/policy for the Validate gate,
+  # internal/auth/extract for the WIZ_global_data scrape). No
+  # third-party dependencies: a misrule here would either leak a
+  # credential-shaped substring to a log sink or strand the refresh
+  # ladder with a non-routable cookie set, so the dependency
+  # surface is held to the smallest possible.
+  - path: github.com/raihankhan/notebooklm-go/internal/auth
+    mode: internal
+
+  # `internal/auth/extract` is the WIZ_global_data extractor and the
+  # four-branch failure taxonomy shared with the refresh ladder
+  # (T-P4-1). The package is mode=internal: stdlib +
+  # internal/redact (so Failure.Error() never leaks a
+  # credential-shaped substring into the diagnostic) and nothing
+  # else inside `internal/`. The cookie jar is reached only through
+  # the registry, never imported directly.
+  - path: github.com/raihankhan/notebooklm-go/internal/auth/extract
+    mode: internal
+
+  # `internal/auth` is the Tokens bundle + LoadFromStorage pipeline
+  # (T-P4-1). The package is mode=internal: stdlib +
+  # internal/redact (so String() / LogValue() route through the
+  # credential primitive) + the four sibling packages this
+  # pipeline composes (internal/auth/storage for the source
+  # resolver, internal/auth/cookiejar for the Jar the transport
+  # kernel mounts, internal/auth/policy for the Validate gate,
+  # internal/auth/extract for the WIZ_global_data scrape). No
+  # third-party dependencies: a misrule here would either leak a
+  # credential-shaped substring to a log sink or strand the refresh
+  # ladder with a non-routable cookie set, so the dependency
+  # surface is held to the smallest possible.
+  - path: github.com/raihankhan/notebooklm-go/internal/auth
+    mode: internal
+
+  # `internal/auth/extract` is the WIZ_global_data extractor and the
+  # four-branch failure taxonomy shared with the refresh ladder
+  # (T-P4-1). The package is mode=internal: stdlib +
+  # internal/redact (so Failure.Error() never leaks a
+  # credential-shaped substring into the diagnostic) and nothing
+  # else inside `internal/`. The cookie jar is reached only through
+  # the registry, never imported directly.
+  - path: github.com/raihankhan/notebooklm-go/internal/auth/extract
+    mode: internal
