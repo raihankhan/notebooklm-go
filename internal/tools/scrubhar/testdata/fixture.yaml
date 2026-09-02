@@ -1,0 +1,66 @@
+# scrubhar test fixture.
+#
+# This file is intentionally NOT a real cassette: it is a textual
+# sketch that contains every credential shape the scrubber is supposed
+# to redact, so a reviewer can read it and the test contract is
+# obvious from inspection.
+#
+# The credentials below are hand-crafted fakes — they do not correspond
+# to any real account. The values are kept short enough that the
+# forbidden-substring assertions in TestScrubHarRemovesAllCredentials
+# can name them precisely.
+---
+interactions:
+  - request:
+      method: POST
+      url: https://notebooklm.google.com/_/LabsTailwindUi/data/batchexecute?rpcids=CCqFvf&source-path=/&f.sid=FAKE_SESSION_ID&at=SCRUBBEDME_CSRF_TOKEN&hl=en
+      headers:
+        Cookie: AEC=AVs14eFakeCookieValue; NID=525fakeNIDValue; SID=fake.sid.value
+        X-Goog-AuthUser: 0
+      body: 'f.req=[["CCqFvf",["some-user-id","user@example.com"]]]'
+    response:
+      code: 200
+      headers:
+        Content-Type: application/json
+      body: |
+        [["wrb.fr","CCqFvf","some-result",null,null,null,"A"]]
+        28
+        [["di",12,"user@example.com"]]
+        15
+        [["e",4]]
+  - request:
+      method: POST
+      url: https://notebooklm.google.com/_/LabsTailwindUi/data/batchexecute?rpcids=izAoDd&source-path=/&f.sid=FAKE_SESSION_ID&at=SCRUBBEDME_CSRF_TOKEN
+      headers:
+        Cookie: AEC=AVs14eFakeCookieValue
+        Content-Type: application/x-www-form-urlencoded
+      body: 'f.req=[["izAoDd","https://docs.google.com/document/d/SOME_DOC_ID/view"]]'
+    response:
+      code: 200
+      headers:
+        Content-Type: application/json
+      body: |
+        [["wrb.fr","izAoDd",null,null,null,null,"A"]]
+        9
+  - request:
+      method: GET
+      url: https://lh3.googleusercontent.com/a/fakeAvatarToken?x-goog-algorithm=GOOG4-RSA-SHA256&x-goog-credential=fake%40example.iam.gserviceaccount.com&x-goog-date=20250902T000000Z&x-goog-expires=1700000000&x-goog-signedheaders=host&x-goog-signature=fakeSignatureValue123
+      headers:
+        Cookie: AEC=AVs14eFakeCookieValue
+    response:
+      code: 200
+      headers:
+        Content-Type: image/png
+      body: !!binary |
+        iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=
+  - request:
+      method: POST
+      url: https://notebooklm.google.com/_/LabsTailwindUi/data/batchexecute?rpcids=cZsgsb&source-path=/&f.sid=FAKE_SESSION_ID&at=SCRUBBEDME_CSRF_TOKEN
+      headers:
+        Cookie: SNlM0e=R2hhY2t5VG9rZW5WYWx1ZQ; FdrFJe=RmFrZVNlc3Npb25JZA
+      body: 'f.req=[["cZsgsb","new note body"]]'
+    response:
+      code: 200
+      body: |
+        [["wrb.fr","cZsgsb","new-note-id",null,null,null,"A"]]
+        20

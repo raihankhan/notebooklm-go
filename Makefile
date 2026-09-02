@@ -19,7 +19,7 @@ LDFLAGS         := -X $(PKG)/internal/buildinfo.Version=$(VERSION) \
 GO              ?= go
 GOLANGCI_LINT   ?= golangci-lint
 
-.PHONY: build check fmt vet lint test test-e2e cover boundarycheck clean release help
+.PHONY: build check fmt vet lint test test-cassette test-e2e cover boundarycheck clean release help
 
 build: ## Compile cmd/notebooklm into ./bin/ with ldflags-injected version
 	@mkdir -p $(BIN_DIR)
@@ -39,6 +39,9 @@ lint: ## Run golangci-lint (installed by CI)
 
 test: ## Run unit tests with the race detector
 	$(GO) test -race ./...
+
+test-cassette: ## Run the cassette match-tuple and credential-guard tests
+	$(GO) test -run 'TestNoCredentialInCassettes|TestMatchTuplePinned' ./internal/web/policy/... ./internal/tools/cassette/...
 
 test-e2e: ## Run end-to-end tests (stubs until later phase)
 	@echo "e2e tests not yet implemented"
