@@ -715,6 +715,22 @@ func (c *Client) MetricsSnapshot() MetricsSnapshot {
 	return fromRuntimeSnapshot(c.metrics.Snapshot())
 }
 
+// Notebooks returns the typed namespace API for the
+// NotebookLM Notebook operations. The returned value is a
+// stable facade bound to the Client; callers may store it and
+// reuse it for the lifetime of the Client. Reusing it after
+// Close is rejected per-call (the namespace API checks the
+// Client's open state on every dispatch).
+//
+// Port of notebooklm.client.py::NotebookLMClient.notebooks —
+// the attribute the Python original exposes. The Go port
+// returns a typed *NotebooksAPI rather than a dynamic
+// namespace dict so call sites can resolve methods at
+// compile time.
+func (c *Client) Notebooks() *NotebooksAPI {
+	return newNotebooksAPI(c)
+}
+
 // checkOpen is the read-side gate that rejects method calls on
 // a closed Client. Held briefly under closedMu.RLock so a
 // concurrent Close cannot flip the flag while RPCCall is
