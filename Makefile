@@ -29,7 +29,7 @@ check: fmt vet lint test boundarycheck build ## Run all checks (the umbrella CI 
 	@echo "check: OK"
 
 fmt: ## Verify gofmt formatting (no diff on empty module)
-	@bash -c 'diff -u <(echo -n) <(gofmt -l .)'
+	@bash -c 'diff -u <(echo -n) <(gofmt -l . | grep -v "^.worktrees/")'
 
 vet: ## Run go vet
 	$(GO) vet ./...
