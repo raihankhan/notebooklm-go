@@ -299,3 +299,16 @@ func Classify(err error) (Code, int) {
 	// Non-library error. Likely a bug or a panic escape.
 	return CodeUnexpectedError, ExitFor(CodeUnexpectedError)
 }
+
+// IsNotFound reports whether err (or any error it wraps) is the
+// ErrNotFound sentinel. The helper mirrors the per-domain Is*
+// predicates that other packages expose (rows.IsNotFound,
+// transport.IsAuth, etc.) so callers in the public SDK can branch
+// on the umbrella sentinel without dragging in a concrete typed
+// error from a lower layer.
+//
+// Passing nil returns false so the call site reads cleanly
+// without an explicit nil-guard.
+func IsNotFound(err error) bool {
+	return stderrors.Is(err, ErrNotFound)
+}
