@@ -25,12 +25,18 @@ import (
 	"strings"
 )
 
-const currentSchemaVersion = 1
+const currentSchemaVersion = 2
 
 // rule is one row of the boundary table.
 type rule struct {
-	Path string
-	Mode string // "internal" or "stdlib"
+	Path     string
+	Mode     string // "internal" | "stdlib" | "external"
+	External []string
+	// ListKey is the most-recently-assigned list-shaped rule field (e.g.
+	// "external") so a subsequent "- item" line under the rule knows
+	// where to append. Empty when the rule has no current list field
+	// open, in which case a dash entry is rejected.
+	ListKey string
 }
 
 // config is the in-memory shape of boundaries.yaml.
@@ -103,19 +109,58 @@ func loadConfig(path string) (*config, error) {
 		}
 		switch {
 		case strings.HasPrefix(stripped, "- "):
-			if err := flush(); err != nil {
-				return nil, err
-			}
-			cur = &rule{}
-			rest := strings.TrimSpace(stripped[2:])
-			if rest != "" {
-				k, v, ok := splitKV(rest)
-				if !ok {
-					return nil, fmt.Errorf("malformed list item: %q", line)
+			// `- item` has two meanings depending on context:
+			//   - at the top of `packages:` (cur == nil): start a new rule
+			//     with `- path: <path>` (the existing behavior).
+			//   - under a rule whose most-recent key is list-shaped
+			//     (cur != nil && cur.ListKey != ""): append one entry to
+			//     that list (currently only `external`).
+			//   - under a rule whose most-recent key is NOT list-shaped
+			//     (cur != nil && cur.ListKey == ""): treat as a sibling
+			//     rule — flush the previous one and start a new rule.
+			//     This matches the YAML pattern of two
+			//     `- path: …` entries at the same indent under
+			//     `packages:`, separated by their own `mode: …`
+			//     children.
+			//
+			// The third ambiguity (cur != nil && cur.ListKey != "" but
+			// the item looks like `key: value` of a known non-list field)
+			// must also resolve to a sibling rule. Otherwise a block
+			// ending in `external: [items]` followed by `- path: …`
+			// would feed `path: …` into parseRuleList as a malformed
+			// allowlist entry and leave the previous rule open so the
+			// subsequent `mode: …` collides on duplicate-mode.
+			isSiblingKey := false
+			if cur != nil {
+				rest := strings.TrimSpace(stripped[2:])
+				k, _, ok := splitKV(rest)
+				if ok && !isListField(k) {
+					isSiblingKey = true
 				}
-				if err := assignRuleField(cur, k, v); err != nil {
+			}
+			if cur == nil || (cur.ListKey == "" || isSiblingKey) {
+				if err := flush(); err != nil {
 					return nil, err
 				}
+				cur = &rule{}
+				rest := strings.TrimSpace(stripped[2:])
+				if rest != "" {
+					k, v, ok := splitKV(rest)
+					if !ok {
+						return nil, fmt.Errorf("malformed list item: %q", line)
+					}
+					if err := assignRuleField(cur, k, v); err != nil {
+						return nil, err
+					}
+				}
+				continue
+			}
+			rest := strings.TrimSpace(stripped[2:])
+			if rest == "" {
+				return nil, fmt.Errorf("empty list item under rule %q", cur.Path)
+			}
+			if err := parseRuleList(cur, cur.ListKey, rest); err != nil {
+				return nil, err
 			}
 		case cur != nil:
 			k, v, ok := splitKV(stripped)
@@ -126,6 +171,15 @@ func loadConfig(path string) (*config, error) {
 			if err := assignRuleField(cur, k, v); err != nil {
 				return nil, err
 			}
+			// Track the most-recently-set list-capable key so a subsequent
+			// `- item` line knows where to append. Default "" rejects stray
+			// dash entries under rules that have no list-shaped fields.
+			if k == "external" {
+				cur.ListKey = k
+			} else {
+				cur.ListKey = ""
+			}
+			continue
 		default:
 			if strings.HasPrefix(stripped, "packages:") {
 				continue
@@ -151,7 +205,7 @@ func loadConfig(path string) (*config, error) {
 		return nil, err
 	}
 	if cfg.SchemaVersion == 0 {
-		cfg.SchemaVersion = 1
+		cfg.SchemaVersion = currentSchemaVersion
 	}
 	if cfg.SchemaVersion != currentSchemaVersion {
 		return nil, fmt.Errorf(
@@ -187,10 +241,48 @@ func assignRuleField(r *rule, k, v string) error {
 			return fmt.Errorf("duplicate mode field")
 		}
 		r.Mode = v
+	case "external":
+		// `external:` is a list-opener: the next lines (each `- …`)
+		// feed parseRuleList via the caller. We treat the empty-value
+		// form as a no-op success (the field shape is set up by the
+		// caller; this branch's job is to mark ListKey so the list-
+		// item branch knows where to append).
+		if v != "" {
+			// The `external: <single-string>` shorthand form is
+			// intentionally not supported — callers must use the
+			// block form. Rejecting the inline form prevents an
+			// accidental `external: foo` from silently allowing a
+			// bare path with no allowlist enforcement.
+			return fmt.Errorf("external: requires a block list (use `- …` lines below)")
+		}
+		return nil
 	default:
 		return fmt.Errorf("unknown rule field %q", k)
 	}
 	return nil
+}
+
+// parseRuleList is invoked when the parser encounters a list entry like
+// `- github.com/foo/bar` directly under a rule (an alternative to
+// `key: [a, b, c]` shorthand which the hand-rolled parser below does not
+// support). The first call seeds the rule field and subsequent calls append.
+func parseRuleList(r *rule, k, v string) error {
+	switch k {
+	case "external":
+		r.External = append(r.External, v)
+	default:
+		return fmt.Errorf("unknown rule list field %q", k)
+	}
+	return nil
+}
+
+// isListField reports whether a key may appear as a `- item` directly
+// under a rule (as opposed to opening a sibling rule). Today only
+// `external` is list-shaped — `path` and `mode` always live on the rule
+// itself and any `- path: …` / `- mode: …` under `packages:` is a
+// sibling rule.
+func isListField(k string) bool {
+	return k == "external"
 }
 
 func validateRule(r rule) error {
@@ -198,15 +290,18 @@ func validateRule(r rule) error {
 		return fmt.Errorf("rule has empty path")
 	}
 	switch r.Mode {
-	case "internal", "stdlib":
+	case "internal", "stdlib", "external":
 		// ok
 	case "":
 		return fmt.Errorf("rule for %s: missing mode", r.Path)
 	default:
 		return fmt.Errorf(
-			"rule for %s: unknown mode %q (want internal or stdlib)",
+			"rule for %s: unknown mode %q (want internal, stdlib, or external)",
 			r.Path, r.Mode,
 		)
+	}
+	if r.Mode == "external" && len(r.External) == 0 {
+		return fmt.Errorf("rule for %s: mode=external requires at least one entry in `external`", r.Path)
 	}
 	return nil
 }
@@ -228,6 +323,27 @@ func isStdlib(path string) bool {
 // the module root).
 func isInternal(moduleRoot, path string) bool {
 	return strings.HasPrefix(path, moduleRoot+"/") || path == moduleRoot
+}
+
+// matchesExternalAllowlist reports whether path is permitted under an
+// `external:` allowlist entry. The entry syntax is "prefix" or "prefix/*"
+// (the latter matches any subpackage of prefix). An entry without a
+// trailing "/*" matches the path itself only, so callers typically
+// list both "foo" and "foo/*" to permit both the root and its children.
+func matchesExternalAllowlist(path string, entries []string) bool {
+	for _, e := range entries {
+		if strings.HasSuffix(e, "/*") {
+			prefix := strings.TrimSuffix(e, "/*")
+			if path == prefix || strings.HasPrefix(path, prefix+"/") {
+				return true
+			}
+			continue
+		}
+		if path == e {
+			return true
+		}
+	}
+	return false
 }
 
 // extractImports walks every .go file under pkgDir and returns the list of
@@ -341,6 +457,22 @@ func checkPackage(r rule, moduleRoot, pkgDir string) ([]violation, error) {
 				Reason: fmt.Sprintf(
 					"%s is mode=stdlib and may not import %s",
 					r.Path, imp,
+				),
+			})
+		case "external":
+			if isInternal(moduleRoot, imp) || isStdlib(imp) {
+				continue
+			}
+			if matchesExternalAllowlist(imp, r.External) {
+				continue
+			}
+			out = append(out, violation{
+				PackagePath: r.Path,
+				ImportPath:  imp,
+				Mode:        r.Mode,
+				Reason: fmt.Sprintf(
+					"%s is mode=external and may not import %s (allowlist: %s)",
+					r.Path, imp, strings.Join(r.External, ", "),
 				),
 			})
 		}
