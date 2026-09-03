@@ -33,3 +33,8 @@ go.work.sum
 
 # AGENTIC_LOOP worktrees (one per Code-agent ticket)
 .worktrees/
+
+# `make build` writes the CLI binary to bin/notebooklm (and the
+# scratch `bin/server` artifact). The bare bin/ directory shows up
+# as untracked in every worktree, which is cosmetic noise.
+bin/
