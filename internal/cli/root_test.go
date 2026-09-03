@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+
+	"github.com/raihankhan/notebooklm-go/internal/cligroups"
 )
 
 // TestNewRootCmdHasPersistentFlags verifies the seven persistent
@@ -43,9 +45,10 @@ func TestNewRootCmdSilenceUsageAndErrors(t *testing.T) {
 func TestNewRootCmdHasGroupBins(t *testing.T) {
 	cmd := NewRootCmd()
 	want := []string{
-		"session", "notebook", "source", "chat", "artifact",
-		"research", "share", "note", "profile", "auth",
-		"language", "misc",
+		cligroups.Session, cligroups.Notebook, cligroups.Source,
+		cligroups.Chat, cligroups.Artifact, cligroups.Research,
+		cligroups.Share, cligroups.Note, cligroups.Profile,
+		cligroups.Auth, cligroups.Language, cligroups.Misc,
 	}
 	seen := make(map[string]bool)
 	for _, g := range cmd.Groups() {

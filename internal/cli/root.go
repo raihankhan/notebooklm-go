@@ -42,6 +42,8 @@ import (
 
 	apperrors "github.com/raihankhan/notebooklm-go/internal/app/errors"
 	"github.com/raihankhan/notebooklm-go/internal/buildinfo"
+	commands "github.com/raihankhan/notebooklm-go/internal/cli/cmd"
+	"github.com/raihankhan/notebooklm-go/internal/cligroups"
 	"github.com/raihankhan/notebooklm-go/internal/config"
 )
 
@@ -55,53 +57,53 @@ import (
 var (
 	// GroupSession hosts session-level commands (login, use, status,
 	// clear, completion, doctor).
-	GroupSession = &cobra.Group{ID: "session", Title: "Session"}
+	GroupSession = &cobra.Group{ID: cligroups.Session, Title: "Session"}
 
 	// GroupNotebook hosts the top-level notebook commands (list,
 	// create, delete, rename, summary, metadata).
-	GroupNotebook = &cobra.Group{ID: "notebook", Title: "Notebook"}
+	GroupNotebook = &cobra.Group{ID: cligroups.Notebook, Title: "Notebook"}
 
 	// GroupSource hosts the `source` subcommand group (list, add,
 	// get, fulltext, stale, wait, …).
-	GroupSource = &cobra.Group{ID: "source", Title: "Source"}
+	GroupSource = &cobra.Group{ID: cligroups.Source, Title: "Source"}
 
 	// GroupChat hosts the chat commands (ask, suggest-prompts,
 	// configure, history).
-	GroupChat = &cobra.Group{ID: "chat", Title: "Chat"}
+	GroupChat = &cobra.Group{ID: cligroups.Chat, Title: "Chat"}
 
 	// GroupArtifact hosts the artifact lifecycle commands (list,
 	// get, rename, delete, export, poll, wait, retry, suggestions).
-	GroupArtifact = &cobra.Group{ID: "artifact", Title: "Artifact"}
+	GroupArtifact = &cobra.Group{ID: cligroups.Artifact, Title: "Artifact"}
 
 	// GroupResearch hosts the research commands (status, wait,
 	// import, cancel).
-	GroupResearch = &cobra.Group{ID: "research", Title: "Research"}
+	GroupResearch = &cobra.Group{ID: cligroups.Research, Title: "Research"}
 
 	// GroupShare hosts the share commands (status, set-public,
 	// set-restricted, view-level, add, update, remove).
-	GroupShare = &cobra.Group{ID: "share", Title: "Share"}
+	GroupShare = &cobra.Group{ID: cligroups.Share, Title: "Share"}
 
 	// GroupNote hosts the note commands (list, create, get, save,
 	// rename, delete).
-	GroupNote = &cobra.Group{ID: "note", Title: "Note"}
+	GroupNote = &cobra.Group{ID: cligroups.Note, Title: "Note"}
 
 	// GroupProfile hosts the profile commands (list, create,
 	// switch, delete, rename).
-	GroupProfile = &cobra.Group{ID: "profile", Title: "Profile"}
+	GroupProfile = &cobra.Group{ID: cligroups.Profile, Title: "Profile"}
 
 	// GroupAuth hosts the auth subcommand group (check, inspect,
 	// import-cookies, logout, refresh).
-	GroupAuth = &cobra.Group{ID: "auth", Title: "Auth"}
+	GroupAuth = &cobra.Group{ID: cligroups.Auth, Title: "Auth"}
 
 	// GroupLanguage hosts the language commands (list, get, set).
-	GroupLanguage = &cobra.Group{ID: "language", Title: "Language"}
+	GroupLanguage = &cobra.Group{ID: cligroups.Language, Title: "Language"}
 
 	// GroupMisc is the safety-net bin for commands that have no
 	// natural home (generate, download, mcp, skill, agent). The
 	// Python original calls this "Other" and only commands
 	// explicitly tagged category="misc" land here; the test in
 	// root_test.go enforces the same guard.
-	GroupMisc = &cobra.Group{ID: "misc", Title: "Misc"}
+	GroupMisc = &cobra.Group{ID: cligroups.Misc, Title: "Misc"}
 )
 
 // NewRootCmd returns the root Cobra command. The function is the
@@ -186,6 +188,11 @@ Run "notebooklm <command> --help" for per-command documentation, and
 	// (completion.go) so the `--help` output is not empty.
 	cmd.AddCommand(newCompletionCmd())
 
+	// T-P5-8 wires the leaf commands (notebook / session / auth /
+	// profile) onto the root. The single Register seam keeps
+	// root.go free of command-construction details.
+	commands.Register(cmd)
+
 	return cmd
 }
 
@@ -261,6 +268,8 @@ func (e *usageError) Error() string { return e.msg }
 // process exit code. The function owns the lifecycle so the CLI
 // test harness can swap in a stub root command without touching
 // main.go.
+//
+//nolint:contextcheck // ctx is wired through cmd.SetContext, not as a parameter.
 func ExecuteContext(ctx context.Context) int {
 	cmd := NewRootCmd()
 	cmd.SetContext(ctx)
