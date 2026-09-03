@@ -51,10 +51,39 @@ import (
 // To record instead of replay, set the env var
 // NOTEBOOKLM_VCR_RECORD=1; the recorder still uses the same matcher
 // and hook so a recorded file round-trips correctly through scrub.
+//
+// Every call logs the resolved cassette path via t.Logf so the test
+// output shows exactly which fixture the recorder opened. The Sprint 2
+// retro surfaced a "peek test" that passed because its relative path
+// silently landed in a sibling module of the project root and the
+// go-vcr default ModeRecordOnce auto-recorded against the live Google
+// server. The Logf line + the existence assertion below are the
+// regression guards that catch the same shape next time.
+//
+// The existence assertion only fires in replay mode (when the
+// NOTEBOOKLM_VCR_RECORD env var is unset) so a CI run that does not
+// record cassettes still gets a clear "asset missing" failure rather
+// than an opaque "no cassette interaction matched" error from go-vcr.
 func NewRecorder(t *testing.T, name string) *recorder.Recorder {
 	t.Helper()
 
 	path := resolveCassettePath(t, name)
+
+	// Always log the resolved path the recorder will open. This is
+	// the regression guard the Sprint 2 retro called out: a relative
+	// path can silently land in a sibling module of the project
+	// root, and the Logf line is what surfaces that case in the
+	// test output rather than letting it pass.
+	t.Logf("cassette path: %s", path)
+
+	// In replay mode (NOTEBOOKLM_VCR_RECORD unset), assert the
+	// cassette actually exists on disk. Without this check, a
+	// relative path that resolves to a non-existent file falls
+	// back to go-vcr's ModeRecordOnce which silently hits the live
+	// Google server — the exact Sprint 2 peek-test failure mode.
+	if os.Getenv("NOTEBOOKLM_VCR_RECORD") == "" {
+		assertCassetteExists(t, path, name)
+	}
 
 	// matcher returns true iff req is "the same interaction" as the
 	// recorded i. The match tuple is ported verbatim from
@@ -276,4 +305,31 @@ func resolveCassettePath(t *testing.T, name string) string {
 		t.Fatalf("cassette: getwd: %v", err)
 	}
 	return filepath.Join(wd, name)
+}
+
+// assertCassetteExists is the regression guard the Sprint 2 retro
+// called out: a relative path that resolves to a non-existent file
+// used to silently fall back to go-vcr's ModeRecordOnce, which hits
+// the live Google server and records a brand-new cassette against
+// the real RPC. The test would then pass for the wrong reason.
+//
+// The helper is split out from NewRecorder so tests can invoke it
+// directly without dealing with the Fatalf side-effect of the
+// recorder construction path.
+//
+// go-vcr appends ".yaml" to whatever cassette name it is given
+// (see cassette.New in gopkg.in/dnaeon/go-vcr.v4/pkg/cassette), so
+// the on-disk file is "<name>.yaml". The helper mirrors that
+// behavior: if name already ends in .yaml, stat it as-is;
+// otherwise stat "<name>.yaml".
+func assertCassetteExists(t *testing.T, path, name string) {
+	t.Helper()
+	diskPath := path
+	if !strings.HasSuffix(strings.ToLower(name), ".yaml") {
+		diskPath = path + ".yaml"
+	}
+	if _, err := os.Stat(diskPath); err != nil {
+		t.Fatalf("cassette fixture missing at resolved path %q (name=%q): %v",
+			diskPath, name, err)
+	}
 }

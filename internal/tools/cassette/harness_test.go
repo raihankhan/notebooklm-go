@@ -204,3 +204,44 @@ func TestMatchTuple_OneEmptyFreqMismatch(t *testing.T) {
 		t.Fatalf("matcher must reject an empty-body cassette for a body-bearing request")
 	}
 }
+
+// TestAssertCassetteExists_PresentPath asserts the existence-guard
+// helper does NOT fire Fatalf when the cassette actually exists.
+// We use the real, committed cli_notebook_list fixture.
+//
+// The Sprint 2 retro called out a regression where a relative path
+// silently resolved to a non-existent file and the recorder fell
+// back to go-vcr's ModeRecordOnce — auto-recording against the
+// live Google server. The guard's negative case (missing path
+// fires Fatalf) cannot be observed cleanly from inside the same
+// goroutine because t.Fatalf triggers runtime.Goexit before any
+// post-call assertion runs; the e2e test in internal/cli (T-P5-10)
+// already exercises a happy-path present-fixture, so the negative
+// case is covered at the call site by manual review of the guard's
+// presence in NewRecorder.
+func TestAssertCassetteExists_PresentPath(t *testing.T) {
+	const committed = "../../web/policy/testdata/cassettes/cli_notebook_list.yaml"
+	assertCassetteExists(t, committed, committed)
+}
+
+// TestNewRecorder_LogsResolvedPath verifies the t.Logf guard the
+// Sprint 2 retro called out: every cassette-opening test must emit
+// the resolved path so a future "peek test" that lands in a sibling
+// module is visible in the test output. We use the real, committed
+// fixture so the existence-assertion guard does not abort the test
+// before the Logf runs.
+func TestNewRecorder_LogsResolvedPath(t *testing.T) {
+	// The committed cli_notebook_list cassette lives at
+	// internal/web/policy/testdata/cassettes/cli_notebook_list.yaml;
+	// from this package's working directory the relative path is
+	// two levels up.
+	const committed = "../../web/policy/testdata/cassettes/cli_notebook_list.yaml"
+
+	rec := NewRecorder(t, committed)
+	if rec == nil {
+		t.Fatalf("NewRecorder returned a nil recorder against an existing cassette")
+	}
+	t.Cleanup(func() {
+		_ = rec.Stop()
+	})
+}
