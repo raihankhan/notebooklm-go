@@ -21,6 +21,7 @@ package notebooklm
 import (
 	"io"
 	"log/slog"
+	"net/http"
 	"strings"
 
 	"github.com/raihankhan/notebooklm-go/internal/runtime"
@@ -94,6 +95,13 @@ type clientConfig struct {
 	// "use the Phase 5 default (16)". A negative value is
 	// rejected at New time.
 	maxInFlight int
+
+	// httpClient is the *http.Client the transport kernel will
+	// mount. Nil means "build the documented default
+	// (&http.Client{Timeout: 30s})". The seam exists so tests
+	// can inject a cassette-backed http.Client whose Transport
+	// is a go-vcr recorder.
+	httpClient *http.Client
 }
 
 // Default values mirrored from the Python source. See
@@ -231,5 +239,29 @@ func WithEpoch(epoch uint64) Option {
 func withMaxInFlight(n int) Option {
 	return OptionFunc(func(cfg *clientConfig) {
 		cfg.maxInFlight = n
+	})
+}
+
+// WithHTTPClient installs a custom *http.Client the transport
+// kernel should mount. When the option is omitted, New builds a
+// default *http.Client with a 30-second timeout (the Python
+// original's _transport/transport.py default).
+//
+// The seam exists so tests can inject a cassette-backed
+// *http.Client whose Transport is a go-vcr recorder; production
+// callers should omit this option. A nil argument is treated as
+// "use the default" so a caller that passes a nil OptionFunc
+// output never silently leaves the Client with no http.Client.
+//
+// Because the kernel owns the http.Client, the kernel's epoch
+// fencing, cookie jar mounting, and 64 MiB response-size cap all
+// apply unchanged to a Client injected here; the option only
+// replaces the http.Client the kernel wraps.
+func WithHTTPClient(httpClient *http.Client) Option {
+	return OptionFunc(func(cfg *clientConfig) {
+		if httpClient == nil {
+			return
+		}
+		cfg.httpClient = httpClient
 	})
 }

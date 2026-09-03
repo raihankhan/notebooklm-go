@@ -1,0 +1,43 @@
+# Cassette for the T-P5-10 e2e: notebook_list --json against a recorded
+# batchexecute RPC interaction.
+#
+# The fixture replays the `ListRecentlyViewedProjects` (`wXbhsf`)
+# invocation the `notebooklm notebook list --json` command path
+# issues. The response body is the chunked-wire chunk the Go
+# batchexecute parser consumes (one wrb.fr frame whose rpc id is
+# `wXbhsf`); the result payload is an empty list of notebook rows so
+# the assertions stay focused on the JSON envelope shape + byte-clean
+# stdout + empty stderr, not on row-shape fidelity.
+#
+# The request body is empty by design: the runtime currently
+# dispatches with buildFunc=nil (see notebooklm/client.go:329 — the
+# fourth arg to transport.NewRuntime is the build callback, which
+# Phase 5 leaves nil and Phase X will wire). Until that lands, the
+# recorder captures an empty request body and the matcher must
+# match empty-empty. The matcher's `matchFreq` treats both-empty as
+# a match (see internal/tools/cassette/harness.go::matchFreq), so
+# the empty body here is the correct contract for the current
+# runtime shape.
+#
+# Header values are single-string maps because the go-vcr v4 cassette
+# struct unmarshals headers as map[string][]string — a scalar value
+# is rejected with "cannot construct !!str into []string".
+---
+version: 2
+interactions:
+  - request:
+      method: POST
+      url: https://notebook.google.com/_/LabsTailwindUi/data/batchexecute
+      headers:
+        Cookie:
+          - SCRUBBED
+        Content-Type:
+          - application/x-www-form-urlencoded
+      body: ''
+    response:
+      code: 200
+      headers:
+        Content-Type:
+          - application/json
+      body: |
+        [["wrb.fr","wXbhsf","[[]]",null,null,null,"generic"]]
