@@ -277,13 +277,18 @@ func New(ctx context.Context, opts ...Option) (*Client, error) {
 	// racing the executor's read path.
 	jar := cookiejar.New()
 
-	// Build the kernel. The http.Client uses a 30-second
+	// Build the kernel. The default http.Client uses a 30-second
 	// timeout matching the Python original's
-	// _transport/transport.py default. The size cap is the
-	// transport package's DefaultMaxResponseBytes (64 MiB).
-	kernel := transport.NewKernel(&http.Client{
-		Timeout: 30 * time.Second,
-	}, jar, transport.DefaultMaxResponseBytes)
+	// _transport/transport.py default. The WithHTTPClient Option
+	// installs a custom *http.Client — the test-only seam for
+	// injecting a cassette-backed Transport.
+	client := cfg.httpClient
+	if client == nil {
+		client = &http.Client{Timeout: 30 * time.Second}
+	}
+	// The size cap is the transport package's
+	// DefaultMaxResponseBytes (64 MiB).
+	kernel := transport.NewKernel(client, jar, transport.DefaultMaxResponseBytes)
 
 	// Pin the epoch the Kernel starts on. NewKernel
 	// initializes to 1 by default; the Option override lets
