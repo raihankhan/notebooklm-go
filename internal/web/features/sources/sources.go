@@ -182,8 +182,9 @@ func AddYouTube(ctx context.Context, c Caller, notebookID, url, mime string) (ro
 // (#1546 migration), with the text-branch discriminator at
 // source-spec slot 1 (the [title, content] pair) and the type
 // marker `2` at source-spec slot 3 (the load-bearing branch
-// selector). `mime` is the wire envelope's MIME slot; pass `""`
-// to use the default (`text/plain`).
+// selector). The Text branch's MIME is server-derived from the
+// content; it does NOT ride on the spec (the slot-1 element is
+// the raw content, not a MIME envelope).
 //
 // allowNull is set to true for Text per the Python original
 // (`_web/sources/add.py::add_text_source`) — the backend
@@ -196,12 +197,12 @@ func AddYouTube(ctx context.Context, c Caller, notebookID, url, mime string) (ro
 // backend emits in the response), so a caller that wants
 // dedupe must handle it externally — see docs/04-rpc-payloads.md
 // §"Sources" / "Operation variants for the idempotency registry".
-func AddText(ctx context.Context, c Caller, notebookID, title, content, mime string) (rows.Source, error) {
+func AddText(ctx context.Context, c Caller, notebookID, title, content string) (rows.Source, error) {
 	if c == nil {
 		return rows.Source{}, errors.New("features.sources.AddText: caller is nil")
 	}
 	sourcePath := "/notebook/" + notebookID
-	raw, err := c.Call(ctx, wire.MethodAddSource, sourcesparams.BuildAddSourceText(notebookID, title, content, mime), sourcePath, true)
+	raw, err := c.Call(ctx, wire.MethodAddSource, sourcesparams.BuildAddSourceText(notebookID, title, content), sourcePath, true)
 	if err != nil {
 		return rows.Source{}, fmt.Errorf("features.sources.AddText: %w", err)
 	}
@@ -228,21 +229,21 @@ func AddText(ctx context.Context, c Caller, notebookID, title, content, mime str
 //
 // For T-S3-004c the SDK calls only the `AddSourceFile` RPC to
 // register the source row; the upload phase is a follow-up
-// ticket. The `mime` parameter is reserved for that follow-up;
-// today it has no effect on the wire envelope (the spec is
-// filename-only). Pass `""` to use the default binary-blob
-// MIME during the upload phase.
+// ticket (T-S3-005a). The MIME override captured by the SDK
+// (via sourceadd.SetMIMEOverride) is forwarded to the upload
+// phase; it has no effect on the wire envelope today (the spec
+// is filename-only).
 //
 // allowNull is set to true per the Python original — the
 // backend tolerates a silent-commit on file-register so a
 // caller that loses the response can re-list the notebook and
 // find the freshly-added source row.
-func AddFile(ctx context.Context, c Caller, notebookID, filename, mime string) (rows.Source, error) {
+func AddFile(ctx context.Context, c Caller, notebookID, filename string) (rows.Source, error) {
 	if c == nil {
 		return rows.Source{}, errors.New("features.sources.AddFile: caller is nil")
 	}
 	sourcePath := "/notebook/" + notebookID
-	raw, err := c.Call(ctx, wire.MethodAddSourceFile, sourcesparams.BuildAddSourceFile(notebookID, filename, mime), sourcePath, true)
+	raw, err := c.Call(ctx, wire.MethodAddSourceFile, sourcesparams.BuildAddSourceFile(notebookID, filename), sourcePath, true)
 	if err != nil {
 		return rows.Source{}, fmt.Errorf("features.sources.AddFile: %w", err)
 	}

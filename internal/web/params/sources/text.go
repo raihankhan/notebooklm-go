@@ -45,15 +45,6 @@ import (
 	"github.com/raihankhan/notebooklm-go/internal/web/wire"
 )
 
-// defaultTextMIME is the canonical MIME envelope for the
-// inline-text branch of AddSources. The wire envelope carries
-// `text/plain` so the backend's text handler matches the
-// expected content type without sniffing. An empty mime on the
-// caller's side falls back to this value so a non-T-S3-004c
-// code path that did not compute a MIME still produces a valid
-// envelope.
-const defaultTextMIME = "text/plain"
-
 // textTypeMarker is the literal the backend reads at source-spec
 // slot 3 to dispatch the inline-text branch. The marker is
 // shared across notebooklm-py and the live wire — `2` is the
@@ -88,17 +79,21 @@ const textSourceTypeCode = 1
 // is still valid; the backend renders the empty title as the
 // raw content. `content` is the raw text body; it is required
 // (the caller pre-flights for non-empty content — see
-// ValidateText). `mime` is the MIME envelope the wire layer
-// attaches; pass `""` to use the default (`text/plain`).
+// ValidateText).
+//
+// The builder does not accept a MIME parameter because the
+// wire spec carries only the [title, content] pair at slot 1
+// — there is no MIME envelope slot. The SDK captures the
+// MIME override via SetMIMEOverride and forwards it to the
+// InferMIMEWithOverride call, but the resolved value does
+// not appear on the wire spec today (the Text branch's MIME
+// is server-derived from the content type).
 //
 // Port of `_web/sources/add.py::SourceAddService.add_text_source`.
 // The shape mirrors `add_url_source` position for position
 // except for the text-branch discriminator (slot 1) and the
 // type marker (slot 3).
-func BuildAddSourceText(notebookID, title, content, mime string) []any {
-	if mime == "" {
-		mime = defaultTextMIME
-	}
+func BuildAddSourceText(notebookID, title, content string) []any {
 	// 11-slot spec: [null, [title, content], null, 2, null×6, 1].
 	// Slot 1 carries the [title, content] pair; slot 3 carries the
 	// type marker `2`; slot 10 is the source-type code. The spec

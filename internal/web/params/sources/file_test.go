@@ -25,10 +25,12 @@ import (
 // pinned against Python's `register_file_source` literal. The
 // 3-slot envelope carries [[filename]] at slot 0, the
 // notebook id at slot 1, and the fresh template block at
-// slot 2.
+// slot 2. The MIME override is forwarded upstream to the
+// upload phase (T-S3-005a) and does NOT ride on the wire
+// spec — the spec is filename-only.
 func TestBuildAddSourceFile_Bytes(t *testing.T) {
 	got, err := params.Encode(func() []any {
-		return BuildAddSourceFile("nb-1", "report.pdf", "")
+		return BuildAddSourceFile("nb-1", "report.pdf")
 	})
 	if err != nil {
 		t.Fatalf("Encode: %v", err)
@@ -39,32 +41,11 @@ func TestBuildAddSourceFile_Bytes(t *testing.T) {
 	}
 }
 
-// TestBuildAddSourceFile_ExplicitMIME — the override path:
-// the
-// File branch's MIME rides on the upload header (T-S3-005a),
-// not on the wire spec. The spec itself is the same shape
-// regardless of the MIME override. The test pins the
-// override's no-op behavior on the spec so a future ticket
-// that adds a spec-side MIME slot for the File branch has to
-// update this assertion.
-func TestBuildAddSourceFile_ExplicitMIME(t *testing.T) {
-	got, err := params.Encode(func() []any {
-		return BuildAddSourceFile("nb-1", "report.pdf", "application/pdf")
-	})
-	if err != nil {
-		t.Fatalf("Encode: %v", err)
-	}
-	want := `[[["report.pdf"]],"nb-1",[2,null,null,[1,null,null,null,null,null,null,null,null,null,[1]]]]`
-	if string(got) != want {
-		t.Fatalf("BuildAddSourceFile explicit MIME bytes differ\n got: %s\nwant: %s", got, want)
-	}
-}
-
 // TestBuildAddSourceFile_Shape — the 3-slot envelope
 // slot-by-slot inspection. Slot 0 carries [[filename]];
 // slot 1 is the notebook id; slot 2 is the template block.
 func TestBuildAddSourceFile_Shape(t *testing.T) {
-	got := BuildAddSourceFile("nb-1", "report.pdf", "application/pdf")
+	got := BuildAddSourceFile("nb-1", "report.pdf")
 	if len(got) != 3 {
 		t.Fatalf("BuildAddSourceFile outer len = %d, want 3", len(got))
 	}
@@ -87,9 +68,9 @@ func TestBuildAddSourceFile_Shape(t *testing.T) {
 // TestBuildAddSourceFile_TemplateBlockFresh —
 // wire.TemplateBlock must return a fresh slice every call.
 func TestBuildAddSourceFile_TemplateBlockFresh(t *testing.T) {
-	a := BuildAddSourceFile("alpha", "a.pdf", "")
+	a := BuildAddSourceFile("alpha", "a.pdf")
 	a[2].([]any)[3].([]any)[0] = "MUTATED"
-	b := BuildAddSourceFile("beta", "b.pdf", "")
+	b := BuildAddSourceFile("beta", "b.pdf")
 	if b[2].([]any)[3].([]any)[0] != 1 {
 		t.Fatalf("BuildAddSourceFile shared template block; got %v", b[2])
 	}
@@ -136,8 +117,7 @@ func TestValidateFile_Rejects(t *testing.T) {
 // TestBuilderCoverageCalls_File — exercises every Go builder
 // directly so the coverage tool sees the function bodies.
 func TestBuilderCoverageCalls_File(t *testing.T) {
-	_ = BuildAddSourceFile("nb-1", "report.pdf", "")
-	_ = BuildAddSourceFile("nb-1", "report.pdf", "application/pdf")
+	_ = BuildAddSourceFile("nb-1", "report.pdf")
 	if err := ValidateFile("report.pdf"); err != nil {
 		t.Fatalf("ValidateFile accepted clean path: %v", err)
 	}

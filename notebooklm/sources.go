@@ -472,8 +472,10 @@ func (a *SourcesAPI) addText(ctx context.Context, notebookID, title, raw string,
 		}
 		opt(&addOptions)
 	}
-	mime := sourceadd.InferMIMEWithOverride(sourceadd.KindText, raw, addOptions.MIMEOverride)
-	src, err := sources.AddText(ctx, a.client.sourcesCaller(), notebookID, title, raw, mime)
+	// Note: the MIME override is captured in addOptions but the
+	// Text branch's MIME is server-derived; the override does not
+	// ride on the wire spec today. See T-S3-004c.
+	src, err := sources.AddText(ctx, a.client.sourcesCaller(), notebookID, title, raw)
 	if err != nil {
 		return Source{}, fmt.Errorf("notebooklm: SourcesAPI.AddText: %w", err)
 	}
@@ -557,11 +559,14 @@ func (a *SourcesAPI) addFile(ctx context.Context, notebookID, path string, kind 
 		}
 		opt(&addOptions)
 	}
-	mime := sourceadd.InferMIMEWithOverride(sourceadd.KindFile, path, addOptions.MIMEOverride)
+	// Note: the MIME override is captured in addOptions but the
+	// File branch's MIME rides on the upload header (T-S3-005a);
+	// the override does not ride on this register-only RPC today.
+	// See T-S3-004c.
 	// The wire spec carries the base name (not the full path)
 	// so the user's directory layout is not exposed.
 	filename := filepath.Base(path)
-	src, err := sources.AddFile(ctx, a.client.sourcesCaller(), notebookID, filename, mime)
+	src, err := sources.AddFile(ctx, a.client.sourcesCaller(), notebookID, filename)
 	if err != nil {
 		return Source{}, fmt.Errorf("notebooklm: SourcesAPI.AddFile: %w", err)
 	}
@@ -607,9 +612,12 @@ func (a *SourcesAPI) addFileWithAddOptions(ctx context.Context, notebookID, path
 		}
 		opt(&addOptions)
 	}
-	mime := sourceadd.InferMIMEWithOverride(sourceadd.KindFile, path, addOptions.MIMEOverride)
+	// Note: the MIME override is captured in addOptions but the
+	// File branch's MIME rides on the upload header (T-S3-005a);
+	// the override does not ride on this register-only RPC today.
+	// See T-S3-004c.
 	filename := filepath.Base(path)
-	src, err := sources.AddFile(ctx, a.client.sourcesCaller(), notebookID, filename, mime)
+	src, err := sources.AddFile(ctx, a.client.sourcesCaller(), notebookID, filename)
 	if err != nil {
 		return Source{}, fmt.Errorf("notebooklm: SourcesAPI.AddFile: %w", err)
 	}

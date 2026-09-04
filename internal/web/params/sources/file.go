@@ -46,18 +46,6 @@ import (
 	"github.com/raihankhan/notebooklm-go/internal/web/wire"
 )
 
-// defaultFileMIME is the canonical MIME envelope fallback for
-// the file branch when the caller passes `""`. The actual
-// MIME rides on the upload header (the wire spec does not
-// carry it), so this constant is only used by the SDK to
-// pre-populate a default value the T-S3-005a upload phase
-// forwards to the `x-goog-upload-header-content-type` header
-// when the caller did not pass `SetMIMEOverride`. The default
-// matches the URL/YouTube envelope (`text/plain` is wrong for
-// generic file bytes; the only safe default is the documented
-// binary-blob fallback).
-const defaultFileMIME = "application/octet-stream"
-
 // BuildAddSourceFile returns the positional payload for
 // `AddSourceFile` (`o4cbdc`) — the local-file branch of the
 // add-source RPC.
@@ -76,14 +64,16 @@ const defaultFileMIME = "application/octet-stream"
 // dispatching). The backend's file handler uses the filename
 // as the display title and as the suggested filename for the
 // download endpoint; passing the full path would expose the
-// user's directory layout. An empty filename falls back to the
-// base of the path the caller supplied.
+// user's directory layout. An empty filename is rejected up-
+// front by ValidateFile — the builder assumes the caller
+// pre-flighted the input.
 //
-// `mime` is the MIME envelope the wire layer attaches; pass
-// `""` to use the default (`application/octet-stream`). The
-// T-S3-004c override path (SetMIMEOverride) feeds through
-// here so a CLI `--mime-type` flag lands on the upload header
-// the T-S3-005a upload phase reads.
+// The builder does not accept a MIME parameter because the
+// wire spec is filename-only. The T-S3-005a upload phase will
+// own the MIME envelope (forwarded via SetMIMEOverride); the
+// SDK's AddFile / AddFileWithAddOptions entry points pass the
+// resolved MIME straight to the features layer without
+// touching the wire builder.
 //
 // Port of `_web/sources/add.py::SourceAddService
 // .register_file_source` (the file-source variant of the
@@ -102,20 +92,9 @@ const defaultFileMIME = "application/octet-stream"
 // different RPCs (`o4cbdc` for file, `izAoDd` for URL); the
 // SDK's features layer dispatches each branch through its own
 // method.
-func BuildAddSourceFile(notebookID, filename, mime string) []any {
-	if mime == "" {
-		mime = defaultFileMIME
-	}
-	name := filename
-	if name == "" {
-		// Empty filename on the wire is rejected by the
-		// backend's file handler; the validate pre-flight
-		// rejects an empty filename at the SDK boundary, so
-		// this branch is purely defensive.
-		name = ""
-	}
+func BuildAddSourceFile(notebookID, filename string) []any {
 	return []any{
-		[]any{[]any{name}},
+		[]any{[]any{filename}},
 		notebookID,
 		wire.TemplateBlock(nil),
 	}

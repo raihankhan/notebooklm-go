@@ -23,12 +23,11 @@ import (
 // pinned against Python's `add_text_source` literal. The
 // 11-slot spec carries [title, content] at slot 1, the type
 // marker `2` at slot 3, and the source-type code `1` at slot
-// 10. An empty mime falls back to "text/plain" so the default
-// case byte-equals the Python literal plus a single quoted
-// "text/plain" at slot 1[1].
+// 10. The Text branch has no MIME envelope slot on the spec
+// (the MIME is server-derived from the content type).
 func TestBuildAddSourceText_Bytes(t *testing.T) {
 	got, err := params.Encode(func() []any {
-		return BuildAddSourceText("nb-1", "Pasted text", "Hello world", "")
+		return BuildAddSourceText("nb-1", "Pasted text", "Hello world")
 	})
 	if err != nil {
 		t.Fatalf("Encode: %v", err)
@@ -39,33 +38,12 @@ func TestBuildAddSourceText_Bytes(t *testing.T) {
 	}
 }
 
-// TestBuildAddSourceText_ExplicitMIME — a non-empty mime
-// replaces the default at slot 1[1] via the override path.
-// The Text branch's MIME rides inside the [title, content]
-// pair at slot 1 (slot 1[1] is the content element); the
-// wire spec at slot 13 — used by URL / YouTube — is NOT the
-// Text branch's MIME envelope. This test pins the Text-branch
-// override behavior so a future ticket that unifies the MIME
-// envelope across kinds has to update both builders.
-func TestBuildAddSourceText_ExplicitMIME(t *testing.T) {
-	got, err := params.Encode(func() []any {
-		return BuildAddSourceText("nb-1", "Title", "Content", "text/html")
-	})
-	if err != nil {
-		t.Fatalf("Encode: %v", err)
-	}
-	want := `[[[null,["Title","Content"],null,2,null,null,null,null,null,null,1]],"nb-1",[2,null,null,[1,null,null,null,null,null,null,null,null,null,[1]]]]`
-	if string(got) != want {
-		t.Fatalf("BuildAddSourceText explicit MIME bytes differ\n got: %s\nwant: %s", got, want)
-	}
-}
-
 // TestBuildAddSourceText_Shape — the 11-slot spec slot-by-
 // slot inspection. Slot 1 carries [title, content]; slot 3
 // carries the type marker `2`; slot 10 is the source-type
 // code. Slots 0, 2, 4-9 must be null.
 func TestBuildAddSourceText_Shape(t *testing.T) {
-	got := BuildAddSourceText("nb-1", "Hello", "World", "text/plain")
+	got := BuildAddSourceText("nb-1", "Hello", "World")
 	if len(got) != 3 {
 		t.Fatalf("BuildAddSourceText outer len = %d, want 3", len(got))
 	}
@@ -104,9 +82,9 @@ func TestBuildAddSourceText_Shape(t *testing.T) {
 // wire.TemplateBlock must return a fresh slice every call;
 // the protocol parser rejects shared mutable nested literals.
 func TestBuildAddSourceText_TemplateBlockFresh(t *testing.T) {
-	a := BuildAddSourceText("alpha", "A", "a", "")
+	a := BuildAddSourceText("alpha", "A", "a")
 	a[2].([]any)[3].([]any)[0] = "MUTATED"
-	b := BuildAddSourceText("beta", "B", "b", "")
+	b := BuildAddSourceText("beta", "B", "b")
 	if b[2].([]any)[3].([]any)[0] != 1 {
 		t.Fatalf("BuildAddSourceText shared template block; got %v", b[2])
 	}
@@ -150,8 +128,7 @@ func TestValidateText_Rejects(t *testing.T) {
 // TestBuilderCoverageCalls_Text — exercises every Go builder
 // directly so the coverage tool sees the function bodies.
 func TestBuilderCoverageCalls_Text(t *testing.T) {
-	_ = BuildAddSourceText("nb-1", "Title", "Content", "")
-	_ = BuildAddSourceText("nb-1", "Title", "Content", "text/html")
+	_ = BuildAddSourceText("nb-1", "Title", "Content")
 	if err := ValidateText("hello world"); err != nil {
 		t.Fatalf("ValidateText accepted clean text: %v", err)
 	}
