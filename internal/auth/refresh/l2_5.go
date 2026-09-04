@@ -126,7 +126,7 @@ type refreshOutput struct {
 	CSRF string `json:"SNlM0e"`
 }
 
-// Storage is the minimal interface L2.5 needs from a profile /
+// InlineStorage is the minimal interface L2.5 needs from a profile /
 // inline-env reader. The interface is intentionally tiny — only
 // Read is required today — so a future Storage impl from L2.0 can
 // satisfy it without dragging the file-backed loader into this
@@ -135,11 +135,18 @@ type refreshOutput struct {
 // can pass a single Storage value uniformly to L1 / L2.0 / L2.5 /
 // L3 without one rung's signature diverging from the others.
 //
+// Note: this type is named InlineStorage rather than Storage so it
+// does not collide with L2.0's Storage interface in the same
+// package. The two interfaces describe different read surfaces
+// (L2.0 reads a serialized profile from disk; L2.5 might read an
+// inline env payload) and a future ticket can unify them when the
+// ladder-wiring ticket (T-S3-001d) lands.
+//
 // Production callers that wire L2.5 in T-S3-001d should pass a
-// non-nil Storage; nil is treated as "no upstream state available"
-// (the rung still runs the inline command — the Storage is a
-// future-proofing seam, not a precondition).
-type Storage interface {
+// non-nil InlineStorage; nil is treated as "no upstream state
+// available" (the rung still runs the inline command — the
+// InlineStorage is a future-proofing seam, not a precondition).
+type InlineStorage interface {
 	// Read returns the serialized profile payload the L2.5
 	// rung MAY consult. L2.5 today ignores the bytes; the
 	// signature exists so the ladder (T-S3-001d) can wire a
@@ -212,7 +219,7 @@ const maxAttempts = 2
 // The function is safe for concurrent use; the only shared
 // mutable state is the env-vars lookup, which is goroutine-safe
 // via os.Getenv.
-func ReloadL2_5(ctx context.Context, storage Storage, logger loggerFunc) (Tokens, error) {
+func ReloadL2_5(ctx context.Context, storage InlineStorage, logger loggerFunc) (Tokens, error) {
 	if err := ctx.Err(); err != nil {
 		return Tokens{}, err
 	}
