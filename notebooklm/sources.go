@@ -26,6 +26,8 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"path/filepath"
+	"strings"
 
 	apperrors "github.com/raihankhan/notebooklm-go/internal/app/errors"
 	"github.com/raihankhan/notebooklm-go/internal/app/sourceadd"
@@ -394,6 +396,387 @@ func (a *SourcesAPI) AddYouTubeWithAddOptions(ctx context.Context, notebookID st
 		Kind:        src.Kind,
 		StatusLabel: src.StatusLabel,
 	}, nil
+}
+
+// AddText adds an inline-text source to a notebook and returns
+// the typed view of the freshly added source. The backing RPC
+// is `AddSources` (`izAoDd`) — see
+// `_web/sources/add.py::SourceAddService.add_text_source` for
+// the Python original.
+//
+// `raw` is the user-supplied text body (any non-empty
+// non-control-character string). The wire envelope carries the
+// text at source-spec slot 1 (the [title, content] pair);
+// AddText passes the empty title (the backend renders the
+// empty title as the raw content). A title-aware adapter uses
+// AddTextWithTitle instead.
+//
+// The signature accepts the `sourceadd.AddOption` variadic
+// (same shape as AddURL / AddYouTube) so a CLI `--mime-type`
+// flag lands on the wire spec at slot 1[1].
+//
+// Text adds are intentionally non-idempotent: the wire
+// envelope does not carry a stable identifier (a text source
+// is uniquely identified only by its content bytes), so a
+// caller that wants dedupe must handle it externally. See
+// docs/04-rpc-payloads.md §"Sources" / "Operation variants
+// for the idempotency registry".
+func (a *SourcesAPI) AddText(ctx context.Context, notebookID string, raw string, opts ...sourceadd.AddOption) (Source, error) {
+	return a.addText(ctx, notebookID, "", raw, opts...)
+}
+
+// AddTextWithAddOptions is the text variant that accepts the
+// application-layer `sourceadd.AddOption` slice. Same slice
+// variadic as AddURLWithAddOptions.
+func (a *SourcesAPI) AddTextWithAddOptions(ctx context.Context, notebookID string, raw string, addOpts []sourceadd.AddOption) (Source, error) {
+	return a.addText(ctx, notebookID, "", raw, addOpts...)
+}
+
+// AddTextWithTitle is the title-aware text variant. The wire
+// envelope carries the [title, content] pair at source-spec
+// slot 1; the title rides at slot 1[0] and the content at
+// slot 1[1]. An empty title falls back to the content as the
+// display name.
+//
+// The two-method split (AddText + AddTextWithTitle) keeps
+// the no-title call site (AddText(raw)) terse while letting
+// the title-aware adapter (CLI `--title` flag) pass the
+// title through without reaching into a setter side-channel.
+func (a *SourcesAPI) AddTextWithTitle(ctx context.Context, notebookID string, title string, raw string, opts ...sourceadd.AddOption) (Source, error) {
+	return a.addText(ctx, notebookID, title, raw, opts...)
+}
+
+// addText is the shared implementation behind AddText /
+// AddTextWithTitle / AddTextWithAddOptions. The variadic
+// `...sourceadd.AddOption` lets all three call sites pass
+// through to the same apply loop without a slice-conversion
+// dance; AddTextWithAddOptions does the slice-to-variadic
+// conversion at the call site.
+func (a *SourcesAPI) addText(ctx context.Context, notebookID, title, raw string, opts ...sourceadd.AddOption) (Source, error) {
+	if a == nil || a.client == nil {
+		return Source{}, errors.New("notebooklm: SourcesAPI: nil client")
+	}
+	if err := ctx.Err(); err != nil {
+		return Source{}, err
+	}
+	if err := validateNotebookIDStrict(notebookID); err != nil {
+		return Source{}, apperrors.Wrap(apperrors.CodeValidationError, err)
+	}
+	if err := sourcesparams.ValidateText(raw); err != nil {
+		return Source{}, apperrors.Wrap(apperrors.CodeValidationError, err)
+	}
+	var addOptions sourceadd.AddOptions
+	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		opt(&addOptions)
+	}
+	// Note: the MIME override is captured in addOptions but the
+	// Text branch's MIME is server-derived; the override does not
+	// ride on the wire spec today. See T-S3-004c.
+	src, err := sources.AddText(ctx, a.client.sourcesCaller(), notebookID, title, raw)
+	if err != nil {
+		return Source{}, fmt.Errorf("notebooklm: SourcesAPI.AddText: %w", err)
+	}
+	return Source{
+		ID:          src.ID,
+		Title:       src.Title,
+		Kind:        src.Kind,
+		StatusLabel: src.StatusLabel,
+	}, nil
+}
+
+// AddFile adds a local-file source to a notebook and returns
+// the typed view of the freshly added source. The backing RPC
+// is `AddSourceFile` (`o4cbdc`) — see
+// `_web/sources/add.py::SourceAddService.register_file_source`
+// for the Python original.
+//
+// `path` is the user-supplied local file path (absolute or
+// relative). The SDK extracts the base name via filepath.Base
+// and dispatches only the base name on the wire — passing the
+// full path would expose the user's directory layout. The
+// symlink gate (sourceadd.Validate) is the seam that rejects
+// paths inside ~/.notebooklm/; the caller is expected to
+// route the path through Validate before reaching here. The
+// SDK still re-runs Validate defensively to surface a typed
+// envelope if a caller skips the gate.
+//
+// The actual file bytes do NOT ride on this spec; they stream
+// via the Scotty upload protocol
+// (docs/04-rpc-payloads.md §"File upload — the Scotty
+// resumable protocol") in a follow-up ticket (T-S3-005a). The
+// MIME envelope rides on the `x-goog-upload-header-content-
+// type` header during the upload phase; today the `mime`
+// override is captured for that future use and has no effect
+// on the wire envelope.
+//
+// The signature accepts the `sourceadd.AddOption` variadic
+// (same shape as AddURL / AddYouTube) so a CLI
+// `--mime-type` flag lands on the upload header the
+// T-S3-005a phase reads.
+func (a *SourcesAPI) AddFile(ctx context.Context, notebookID string, path string, opts ...sourceadd.AddOption) (Source, error) {
+	return a.addFile(ctx, notebookID, path, sourceadd.KindFile, opts...)
+}
+
+// AddFileWithAddOptions is the file variant that accepts the
+// application-layer `sourceadd.AddOption` slice. Same
+// slice-variadic as AddURLWithAddOptions.
+func (a *SourcesAPI) AddFileWithAddOptions(ctx context.Context, notebookID string, path string, addOpts []sourceadd.AddOption, opts ...SourcesOption) (Source, error) {
+	return a.addFileWithAddOptions(ctx, notebookID, path, sourceadd.KindFile, addOpts, opts...)
+}
+
+// addFile is the variadic-AddOption entry point shared by
+// AddFile / AddFileWithTitle / AddFileRaw. Variadic shape
+// keeps the no-prior-classify call site (AddFile(path))
+// terse; the underlying apply-loop reads each option via the
+// same AddOption closure type sourceadd owns.
+func (a *SourcesAPI) addFile(ctx context.Context, notebookID, path string, kind sourceadd.Kind, opts ...sourceadd.AddOption) (Source, error) {
+	if a == nil || a.client == nil {
+		return Source{}, errors.New("notebooklm: SourcesAPI: nil client")
+	}
+	if err := ctx.Err(); err != nil {
+		return Source{}, err
+	}
+	if err := validateNotebookIDStrict(notebookID); err != nil {
+		return Source{}, apperrors.Wrap(apperrors.CodeValidationError, err)
+	}
+	if err := sourcesparams.ValidateFile(path); err != nil {
+		return Source{}, apperrors.Wrap(apperrors.CodeValidationError, err)
+	}
+	// Re-classify if the caller passed KindUnknown; otherwise
+	// trust the caller's classification. The Validate call
+	// also runs the symlink gate (rejects paths inside
+	// ~/.notebooklm/).
+	if _, err := sourceadd.Validate(path, kind); err != nil {
+		return Source{}, err
+	}
+	var addOptions sourceadd.AddOptions
+	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		opt(&addOptions)
+	}
+	// Note: the MIME override is captured in addOptions but the
+	// File branch's MIME rides on the upload header (T-S3-005a);
+	// the override does not ride on this register-only RPC today.
+	// See T-S3-004c.
+	// The wire spec carries the base name (not the full path)
+	// so the user's directory layout is not exposed.
+	filename := filepath.Base(path)
+	src, err := sources.AddFile(ctx, a.client.sourcesCaller(), notebookID, filename)
+	if err != nil {
+		return Source{}, fmt.Errorf("notebooklm: SourcesAPI.AddFile: %w", err)
+	}
+	return Source{
+		ID:          src.ID,
+		Title:       src.Title,
+		Kind:        src.Kind,
+		StatusLabel: src.StatusLabel,
+	}, nil
+}
+
+// addFileWithAddOptions is the slice-variadic entry point
+// shared by AddFileWithAddOptions. The slice-to-variadic
+// conversion happens at the call site so the apply-loop
+// reads each option via the same AddOption closure.
+func (a *SourcesAPI) addFileWithAddOptions(ctx context.Context, notebookID, path string, kind sourceadd.Kind, addOpts []sourceadd.AddOption, opts ...SourcesOption) (Source, error) {
+	if a == nil || a.client == nil {
+		return Source{}, errors.New("notebooklm: SourcesAPI: nil client")
+	}
+	if err := ctx.Err(); err != nil {
+		return Source{}, err
+	}
+	if err := validateNotebookIDStrict(notebookID); err != nil {
+		return Source{}, apperrors.Wrap(apperrors.CodeValidationError, err)
+	}
+	if err := sourcesparams.ValidateFile(path); err != nil {
+		return Source{}, apperrors.Wrap(apperrors.CodeValidationError, err)
+	}
+	if _, err := sourceadd.Validate(path, kind); err != nil {
+		return Source{}, err
+	}
+	var options SourcesOptions
+	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		opt(&options)
+	}
+	var addOptions sourceadd.AddOptions
+	for _, opt := range addOpts {
+		if opt == nil {
+			continue
+		}
+		opt(&addOptions)
+	}
+	// Note: the MIME override is captured in addOptions but the
+	// File branch's MIME rides on the upload header (T-S3-005a);
+	// the override does not ride on this register-only RPC today.
+	// See T-S3-004c.
+	filename := filepath.Base(path)
+	src, err := sources.AddFile(ctx, a.client.sourcesCaller(), notebookID, filename)
+	if err != nil {
+		return Source{}, fmt.Errorf("notebooklm: SourcesAPI.AddFile: %w", err)
+	}
+	return Source{
+		ID:          src.ID,
+		Title:       src.Title,
+		Kind:        src.Kind,
+		StatusLabel: src.StatusLabel,
+	}, nil
+}
+
+// AddDrive adds a Google Drive share-URL source to a notebook
+// and returns the typed view of the freshly added source.
+// The backing RPC is `AddSources` (`izAoDd`) — see
+// `_web/sources/add.py::SourceAddService.add_drive_source`
+// for the Python original.
+//
+// `shareURL` is the user-supplied Drive share URL (one of
+// drive.google.com/file/…, docs.google.com/document/…,
+// docs.google.com/spreadsheets/…,
+// docs.google.com/presentation/…). The classifier
+// (sourceadd.Classify) routes the URL to the Drive branch
+// based on the host + path; the SDK extracts the file id
+// from the URL before dispatching so the wire spec carries
+// only the opaque id (not the full share URL).
+//
+// The Drive branch uses the legacy 4-element tail envelope
+// (NOT the fresh TPL block) per the #1546 TODO. The wire
+// spec carries the [fileID, mimeType, 1, title] quad at
+// source-spec slot 0; the mimeType rides at quad[1] and the
+// title at quad[3].
+//
+// The signature accepts the `sourceadd.AddOption` variadic
+// (same shape as AddURL / AddYouTube) so a CLI
+// `--mime-type google-doc` flag (the canonical
+// `application/vnd.google-apps.document` MIME) lands on the
+// wire spec at quad[1].
+func (a *SourcesAPI) AddDrive(ctx context.Context, notebookID string, shareURL string, opts ...sourceadd.AddOption) (Source, error) {
+	return a.addDrive(ctx, notebookID, shareURL, sourceadd.KindDrive, opts...)
+}
+
+// AddDriveWithAddOptions is the Drive variant that accepts the
+// application-layer `sourceadd.AddOption` slice. Same slice
+// variadic as AddURLWithAddOptions.
+func (a *SourcesAPI) AddDriveWithAddOptions(ctx context.Context, notebookID string, shareURL string, addOpts []sourceadd.AddOption, opts ...SourcesOption) (Source, error) {
+	return a.addDriveWithAddOptions(ctx, notebookID, shareURL, sourceadd.KindDrive, addOpts, opts...)
+}
+
+// addDrive is the variadic-AddOption entry point shared by
+// AddDrive. Variadic shape keeps the no-add-options call
+// site (AddDrive(shareURL)) terse.
+func (a *SourcesAPI) addDrive(ctx context.Context, notebookID, shareURL string, kind sourceadd.Kind, opts ...sourceadd.AddOption) (Source, error) {
+	if a == nil || a.client == nil {
+		return Source{}, errors.New("notebooklm: SourcesAPI: nil client")
+	}
+	if err := ctx.Err(); err != nil {
+		return Source{}, err
+	}
+	if err := validateNotebookIDStrict(notebookID); err != nil {
+		return Source{}, apperrors.Wrap(apperrors.CodeValidationError, err)
+	}
+	if err := sourcesparams.ValidateDriveURL(shareURL); err != nil {
+		return Source{}, apperrors.Wrap(apperrors.CodeValidationError, err)
+	}
+	if _, err := sourceadd.Validate(shareURL, kind); err != nil {
+		return Source{}, err
+	}
+	var addOptions sourceadd.AddOptions
+	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		opt(&addOptions)
+	}
+	fileID := extractDriveFileID(shareURL)
+	mime := sourceadd.InferMIMEWithOverride(sourceadd.KindDrive, shareURL, addOptions.MIMEOverride)
+	src, err := sources.AddDrive(ctx, a.client.sourcesCaller(), notebookID, fileID, mime, "")
+	if err != nil {
+		return Source{}, fmt.Errorf("notebooklm: SourcesAPI.AddDrive: %w", err)
+	}
+	return Source{
+		ID:          src.ID,
+		Title:       src.Title,
+		Kind:        src.Kind,
+		StatusLabel: src.StatusLabel,
+	}, nil
+}
+
+// addDriveWithAddOptions is the slice-variadic entry point
+// shared by AddDriveWithAddOptions.
+func (a *SourcesAPI) addDriveWithAddOptions(ctx context.Context, notebookID, shareURL string, kind sourceadd.Kind, addOpts []sourceadd.AddOption, opts ...SourcesOption) (Source, error) {
+	if a == nil || a.client == nil {
+		return Source{}, errors.New("notebooklm: SourcesAPI: nil client")
+	}
+	if err := ctx.Err(); err != nil {
+		return Source{}, err
+	}
+	if err := validateNotebookIDStrict(notebookID); err != nil {
+		return Source{}, apperrors.Wrap(apperrors.CodeValidationError, err)
+	}
+	if err := sourcesparams.ValidateDriveURL(shareURL); err != nil {
+		return Source{}, apperrors.Wrap(apperrors.CodeValidationError, err)
+	}
+	if _, err := sourceadd.Validate(shareURL, kind); err != nil {
+		return Source{}, err
+	}
+	var options SourcesOptions
+	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		opt(&options)
+	}
+	var addOptions sourceadd.AddOptions
+	for _, opt := range addOpts {
+		if opt == nil {
+			continue
+		}
+		opt(&addOptions)
+	}
+	fileID := extractDriveFileID(shareURL)
+	mime := sourceadd.InferMIMEWithOverride(sourceadd.KindDrive, shareURL, addOptions.MIMEOverride)
+	src, err := sources.AddDrive(ctx, a.client.sourcesCaller(), notebookID, fileID, mime, "")
+	if err != nil {
+		return Source{}, fmt.Errorf("notebooklm: SourcesAPI.AddDrive: %w", err)
+	}
+	return Source{
+		ID:          src.ID,
+		Title:       src.Title,
+		Kind:        src.Kind,
+		StatusLabel: src.StatusLabel,
+	}, nil
+}
+
+// extractDriveFileID extracts the opaque Drive file id from a
+// share URL. The URL shapes the SDK accepts are:
+//
+//   - https://drive.google.com/file/d/<id>/view
+//   - https://drive.google.com/document/d/<id>/view
+//   - https://docs.google.com/document/d/<id>/edit
+//   - https://docs.google.com/spreadsheets/d/<id>/edit
+//   - https://docs.google.com/presentation/d/<id>/edit
+//
+// The id is the 33-char (typically) opaque segment between
+// /d/ and the trailing /<view|edit|…>. We do a minimal scan
+// (no third-party URL library) so the boundary table stays
+// green; an unparseable URL falls back to the raw string
+// (the wire layer will reject it with a typed error).
+func extractDriveFileID(shareURL string) string {
+	const marker = "/d/"
+	i := strings.Index(shareURL, marker)
+	if i < 0 {
+		return shareURL
+	}
+	rest := shareURL[i+len(marker):]
+	if j := strings.IndexAny(rest, "/?#"); j >= 0 {
+		return rest[:j]
+	}
+	return rest
 }
 
 // Source is the public SDK view of one decoded source row. Mirrors
