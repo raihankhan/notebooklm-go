@@ -148,7 +148,7 @@ A Homebrew tap will land alongside the v1 release.
 ### 1. Authenticate
 
 ```bash
-# Resuse a signed-in browser session — no separate login flow
+# Reuse a signed-in browser session — no separate login flow
 notebooklm auth check
 ```
 
