@@ -7,10 +7,10 @@
 // mirrors the Python split into:
 //
 //   - row adapters  — typed views over individual wire records (StreamFrameRow,
-//                     StreamEnvelopeRow, AnswerRow, CitationRow, …)
+//     StreamEnvelopeRow, AnswerRow, CitationRow, …)
 //   - chunk parser  — extract one chunk's contribution to the assembled answer
 //   - stream parser — walk the chunked `rt=c` body, accumulate candidate answers,
-//                     and pick the winning one per #2122.
+//     and pick the winning one per #2122.
 //
 // The streamed chat endpoint is **not** a batchexecute RPC: there is no
 // obfuscated method id to thread through, so every descent labels itself
@@ -31,8 +31,6 @@
 package rows
 
 import (
-	"bufio"
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -41,6 +39,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/raihankhan/notebooklm-go/internal/web/wire"
 )
 
 // -----------------------------------------------------------------------------
@@ -90,15 +90,15 @@ type ChatStreamResult struct {
 // parser does NOT re-densify after skipping malformed rows, so a hole
 // in the sequence means the [N] marker has no anchor.
 type ChatReference struct {
-	SourceID    string
-	CitedText   string
-	StartChar   int
-	EndChar     int
-	ChunkID     string
-	FragmentStart int
-	FragmentEnd   int
-	Score       float64
-	CitationNumber int
+	SourceID          string
+	CitedText         string
+	StartChar         int
+	EndChar           int
+	ChunkID           string
+	FragmentStart     int
+	FragmentEnd       int
+	Score             float64
+	CitationNumber    int
 	AnswerAnchorStart int
 	AnswerAnchorEnd   int
 }
@@ -148,23 +148,26 @@ func ParseChatStreamBytes(body []byte) (*ChatStreamResult, error) {
 	// candidates — final-marked, best-marked, best-unmarked, empty — to
 	// match the Python original's answer-selection policy (#2122).
 	var (
-		finalMarkedAnswer     string
-		finalMarkedRefs       []ChatReference
-		bestMarkedAnswer      string
-		bestMarkedRefs        []ChatReference
-		bestUnmarkedAnswer    string
-		bestUnmarkedRefs      []ChatReference
-		sawDriftSignal        bool
-		serverConvID          string
-		turnKey               *ConversationTurnKey
-		nextSteps             []NextStepSuggestion
-		sawFinalChunk         bool
-		parseableChunkCount   int
-		terminalSequence      *int64
+		finalMarkedAnswer   string
+		finalMarkedRefs     []ChatReference
+		bestMarkedAnswer    string
+		bestMarkedRefs      []ChatReference
+		bestUnmarkedAnswer  string
+		bestUnmarkedRefs    []ChatReference
+		sawDriftSignal      bool
+		serverConvID        string
+		turnKey             *ConversationTurnKey
+		nextSteps           []NextStepSuggestion
+		sawFinalChunk       bool
+		parseableChunkCount int
+		terminalSequence    *int64
 	)
 
-	processChunk := func(jsonStr string) {
+	processChunk := func(jsonStr string) error {
 		chunk := extractChunk(jsonStr)
+		if chunk.err != nil {
+			return chunk.err
+		}
 		if chunk.parseable {
 			parseableChunkCount++
 		}
@@ -199,8 +202,10 @@ func ParseChatStreamBytes(body []byte) (*ChatStreamResult, error) {
 		if chunk.terminalSequence != nil {
 			terminalSequence = chunk.terminalSequence
 		}
+		return nil
 	}
 
+	var chunkErr error
 	for i := 0; i < len(lines); {
 		line := strings.TrimSpace(lines[i])
 		if line == "" {
@@ -212,13 +217,22 @@ func ParseChatStreamBytes(body []byte) (*ChatStreamResult, error) {
 		if _, err := strconv.Atoi(line); err == nil {
 			i++
 			if i < len(lines) {
-				processChunk(lines[i])
+				if err := processChunk(lines[i]); err != nil {
+					chunkErr = err
+					break
+				}
 			}
 			i++
 			continue
 		}
-		processChunk(line)
+		if err := processChunk(line); err != nil {
+			chunkErr = err
+			break
+		}
 		i++
+	}
+	if chunkErr != nil {
+		return nil, chunkErr
 	}
 
 	if parseableChunkCount == 0 {
@@ -264,11 +278,11 @@ func ParseChatStreamBytes(body []byte) (*ChatStreamResult, error) {
 	finalRefs = assignCitationNumbers(finalRefs)
 
 	return &ChatStreamResult{
-		Answer:        longestAnswer,
-		References:    finalRefs,
+		Answer:         longestAnswer,
+		References:     finalRefs,
 		ConversationID: serverConvID,
-		TurnKey:       turnKey,
-		NextSteps:     nextSteps,
+		TurnKey:        turnKey,
+		NextSteps:      nextSteps,
 	}, nil
 }
 
@@ -340,11 +354,6 @@ func stripAntiXSSI(s string) string {
 type StreamFrameRow struct {
 	raw []any
 }
-
-// tagSource is the label the strict accessor would use; the streaming
-// endpoint is not a batchexecute RPC so we pass method_id = "" and
-// localize drift via this label.
-const tagSource = "ChatStreamFrameRow.tag"
 
 // Tag returns the frame tag at item[0] ("wrb.fr" / "er" / "e" / ...).
 func (s StreamFrameRow) Tag() string {
@@ -578,14 +587,14 @@ type AnswerRow struct {
 }
 
 const (
-	answerTextPos     = 0
-	answerConvPos     = 2
-	answerEmptyReason = 3
-	answerTypePos     = 4
-	answerMarkerPos   = 4
+	answerTextPos      = 0
+	answerConvPos      = 2
+	answerEmptyReason  = 3
+	answerTypePos      = 4
+	answerMarkerPos    = 4
 	answerCitationsPos = 3
-	answerMarkerValue = 1
-	answerDocBodyPos  = 0
+	answerMarkerValue  = 1
+	answerDocBodyPos   = 0
 
 	turnKeySessionPos = 0
 	turnKeyTurnPos    = 1
@@ -655,10 +664,8 @@ func (a AnswerRow) TurnKey() *ConversationTurnKey {
 		}
 	}
 	if len(b) > turnKeyCodePos {
-		if n, ok := b[turnKeyCodePos].(int); ok {
-			ck.TurnCode = &n
-		} else if f, ok := b[turnKeyCodePos].(float64); ok && f == float64(int64(f)) {
-			n := int(f)
+		n, ok := asIndex(b[turnKeyCodePos])
+		if ok {
 			ck.TurnCode = &n
 		}
 	}
@@ -682,16 +689,13 @@ func (a AnswerRow) typeBlock() []any {
 // (first[4][4] == 1).
 func (a AnswerRow) IsAnswer() bool {
 	tb := a.typeBlock()
-	if tb == nil || len(tb) <= answerMarkerPos {
+	if len(tb) <= answerMarkerPos {
 		return false
 	}
-	n, ok := tb[answerMarkerPos].(int)
+	v := tb[answerMarkerPos]
+	n, ok := asIndex(v)
 	if !ok {
-		if f, ok := tb[answerMarkerPos].(float64); ok && f == float64(int64(f)) {
-			n = int(f)
-		} else {
-			return false
-		}
+		return false
 	}
 	return n == answerMarkerValue
 }
@@ -714,7 +718,7 @@ func (a AnswerRow) SuggestsWireDrift() bool {
 // Truthy non-list raises — structural drift, not a citation-less answer.
 func (a AnswerRow) Citations() ([]any, error) {
 	tb := a.typeBlock()
-	if tb == nil || len(tb) <= answerCitationsPos {
+	if len(tb) <= answerCitationsPos {
 		return nil, nil
 	}
 	c := tb[answerCitationsPos]
@@ -776,17 +780,17 @@ func (c CitationRow) detail() *CitationDetail {
 // -----------------------------------------------------------------------------
 
 // CitationDetail is the typed view of a citation detail block (cite[1],
-// a `Citation` message). It centralises the score / fragment-range /
+// a `Citation` message). It centralizes the score / fragment-range /
 // fragment-elements / source-id positions.
 type CitationDetail struct {
 	raw []any
 }
 
 const (
-	citeScorePos        = 2
-	citeFragmentRange   = 3
-	citeFragment        = 4
-	citeSourceIDPos     = 5
+	citeScorePos      = 2
+	citeFragmentRange = 3
+	citeFragment      = 4
+	citeSourceIDPos   = 5
 
 	fragmentElementsPos = 0
 
@@ -854,20 +858,24 @@ type chunkExtraction struct {
 	turnKey          *ConversationTurnKey
 	nextSteps        []NextStepSuggestion
 	terminalSequence *int64
+	err              error
 }
 
 // extractChunk parses one chunk JSON line into a chunkExtraction.
 //
 // On a malformed JSON line the returned chunkExtraction has parseable
 // false. On a non-list payload the same. On a parsed list, every item
-// is examined; an "er" tag raises ChatError, an "e" tag captures the
-// terminal sequence, a "wrb.fr" tag attempts the inner-JSON decode and
-// populates the answer/citations/turn-key/etc.
+// is examined; an "er" tag captures ChatError in the err field, an
+// "e" tag captures the terminal sequence, a "wrb.fr" tag attempts the
+// inner-JSON decode and populates the answer/citations/turn-key/etc.
+//
+// The caller (ParseChatStreamBytes) checks chunk.err after the call
+// and short-circuits with the typed error.
 func extractChunk(jsonStr string) chunkExtraction {
 	out := chunkExtraction{}
 
 	var data any
-	if err := json.Unmarshal([]byte(jsonStr), &data); err != nil {
+	if err := wire.Unmarshal([]byte(jsonStr), &data); err != nil {
 		return out
 	}
 	items, ok := data.([]any)
@@ -883,7 +891,8 @@ func extractChunk(jsonStr string) chunkExtraction {
 		frame := StreamFrameRow{raw: item}
 		tag := frame.Tag()
 		if tag == "er" {
-			raiseChatErrorFrame(item, frame)
+			out.err = chatErrorFrame(item, frame)
+			return out
 		}
 		if tag == "e" {
 			out.terminalSequence = frame.TerminalSequence()
@@ -900,14 +909,18 @@ func extractChunk(jsonStr string) chunkExtraction {
 			// rejection (oversized prompt / rate limit).
 			payload := frame.ErrorPayload()
 			if payload != nil {
-				raiseIfRateLimited(payload)
-				raiseChatRejection(payload)
+				if rl := checkRateLimited(payload); rl != nil {
+					out.err = rl
+					return out
+				}
+				out.err = chatRejection(payload)
+				return out
 			}
 			continue
 		}
 
 		var innerData any
-		if err := json.Unmarshal([]byte(innerStr), &innerData); err != nil {
+		if err := wire.Unmarshal([]byte(innerStr), &innerData); err != nil {
 			continue
 		}
 		out.parseable = true
@@ -940,8 +953,8 @@ func extractChunk(jsonStr string) chunkExtraction {
 		first, ok := innerList[0].([]any)
 		if !ok {
 			// Raised on the Python side as UnknownRPCMethodError — we
-			// surface it as a parse error since the streamed-chat path
-			// does not have a registered RPC id to attach.
+			// skip and fall through since the streamed-chat path does
+			// not have a registered RPC id to attach.
 			continue
 		}
 		if len(first) == 0 {
@@ -959,8 +972,6 @@ func extractChunk(jsonStr string) chunkExtraction {
 
 		citations, err := ans.Citations()
 		if err != nil {
-			// Citation container is structurally malformed; surface
-			// as a chat error so the caller sees the wire drift.
 			out.text = text
 			out.isAnswer = ans.IsAnswer()
 			out.conversationID = ans.ServerConversationID()
@@ -983,15 +994,15 @@ func extractChunk(jsonStr string) chunkExtraction {
 	return out
 }
 
-// raiseChatErrorFrame surfaces a server-side "er" error frame as a
-// ChatError. The error code (if present) is echoed verbatim.
-func raiseChatErrorFrame(item []any, frame StreamFrameRow) {
+// chatErrorFrame returns a *ChatError for a server-side "er" error
+// frame. The error code (if present) is echoed verbatim.
+func chatErrorFrame(item []any, frame StreamFrameRow) *ChatError {
 	code := frame.ErrorCode()
 	detail := ""
 	if code != nil {
 		detail = fmt.Sprintf(" (code %v)", code)
 	}
-	panic(&ChatError{
+	return &ChatError{
 		Message: fmt.Sprintf(
 			"Chat request failed: the server returned an error frame%s. "+
 				"This usually means the request was rejected or the conversation "+
@@ -999,13 +1010,13 @@ func raiseChatErrorFrame(item []any, frame StreamFrameRow) {
 			detail,
 		),
 		ErrorPayload: item,
-	})
+	}
 }
 
-// raiseChatRejection surfaces a wrb.fr request rejection (status at
-// item[5]) as a ChatError. A bare [3] (INVALID_ARGUMENT) is the
+// chatRejection returns a *ChatError for a wrb.fr request rejection
+// (status at item[5]). A bare [3] (INVALID_ARGUMENT) is the
 // documented oversized-prompt shape (issue #1472).
-func raiseChatRejection(payload []any) {
+func chatRejection(payload []any) *ChatError {
 	row := ErrorPayloadRow{raw: payload}
 	status := row.StatusCode()
 	detail := ""
@@ -1017,7 +1028,7 @@ func raiseChatRejection(payload []any) {
 	if msg != "" {
 		suffix = fmt.Sprintf(" The server said: %s", msg)
 	}
-	panic(&ChatError{
+	return &ChatError{
 		Message: fmt.Sprintf(
 			"Chat request was rejected by the server%s. "+
 				"This usually means the request was malformed or too large — most "+
@@ -1026,15 +1037,12 @@ func raiseChatRejection(payload []any) {
 			detail, suffix,
 		),
 		ErrorPayload: payload,
-	})
+	}
 }
 
-// raiseIfRateLimited inspects an error payload for a UserDisplayableError
-// marker (rate-limit) and raises ChatError if found. Other error shapes
-// (and any parse failure) are silently ignored — the caller falls through
-// to raiseChatRejection.
-func raiseIfRateLimited(payload []any) {
-	defer func() { _ = recover() }()
+// checkRateLimited returns *ChatError if the error payload contains a
+// UserDisplayableError marker (rate-limit). nil otherwise.
+func checkRateLimited(payload []any) *ChatError {
 	row := ErrorPayloadRow{raw: payload}
 	for _, entry := range row.Entries() {
 		et := row.EntryType(entry)
@@ -1044,16 +1052,17 @@ func raiseIfRateLimited(payload []any) {
 			if msg != "" {
 				suffix = fmt.Sprintf(" The server said: %s", msg)
 			}
-			panic(&ChatError{
+			return &ChatError{
 				Message: fmt.Sprintf(
 					"Chat request was rate limited or rejected by the API. "+
 						"Wait a few seconds and try again.%s",
 					suffix,
 				),
 				ErrorPayload: payload,
-			})
+			}
 		}
 	}
+	return nil
 }
 
 // -----------------------------------------------------------------------------
@@ -1193,7 +1202,10 @@ func extractFragmentRange(d *CitationDetail) (int, int, bool) {
 	rawStart, rawEnd := d.fragmentRange()
 	start, ok1 := asIndex(rawStart)
 	end, ok2 := asIndex(rawEnd)
-	if !ok1 || !ok2 || start < 0 || end < start {
+	if !ok1 || !ok2 {
+		return 0, 0, false
+	}
+	if start < 0 || end < start {
 		return 0, 0, false
 	}
 	return start, end, true
@@ -1316,16 +1328,3 @@ func (e *wireShapeDriftError) Error() string {
 // -----------------------------------------------------------------------------
 // Small helpers
 // -----------------------------------------------------------------------------
-
-// readerFromBytes returns an io.Reader for the given bytes.
-func readerFromBytes(b []byte) io.Reader { return bytes.NewReader(b) }
-
-// bufferedLines returns a bufio.Scanner configured for line-delimited
-// reads. Reserved for the streaming incremental path (T-S3-007e); the
-// current parser buffers the entire body up-front because the chunked
-// framing is line-oriented and the body is bounded by the response cap.
-func bufferedLines(r io.Reader) *bufio.Scanner {
-	s := bufio.NewScanner(r)
-	s.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
-	return s
-}
