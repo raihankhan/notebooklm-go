@@ -1,0 +1,45 @@
+# Cassette for T-S3-004b: source_add YouTube branch.
+#
+# The fixture replays the `AddSources` (`izAoDd`) invocation the
+# `SourcesAPI.AddYouTube` path issues. The response body is the
+# chunked-wire chunk the Go batchexecute parser consumes (one
+# wrb.fr frame whose rpc id is `izAoDd`); the result payload is
+# the freshly added source row (medium-nested shape — outer[0] is
+# the entry row, the entry itself is `[id_envelope, title, …]`)
+# so the test exercises the decode path end-to-end.
+#
+# The YouTube branch differs from the URL branch in one load-
+# bearing position: the URL rides at source-spec slot 7 (not slot
+# 2). The slot shift is the URL / YouTube branch discriminator
+# — the backend reads the URL from whichever slot the spec
+# populates and dispatches the matching branch.
+#
+# The request body is the URL-encoded `f.req=…` form the
+# batchexecute protocol expects. The decoded payload is the 15-
+# slot YouTube-branch spec at slot 0 (URL at source-spec slot 7,
+# MIME at source-spec slot 13, source-type code at source-spec
+# slot 14), the notebook id at slot 1, and the nested template
+# block at slot 2.
+#
+# Header values are single-string maps because the go-vcr v4 cassette
+# struct unmarshals headers as map[string][]string — a scalar value
+# is rejected with "cannot construct !!str into []string".
+---
+version: 2
+interactions:
+  - request:
+      method: POST
+      url: https://notebooklm.google.com/_/LabsTailwindUi/data/batchexecute
+      headers:
+        Cookie:
+          - SCRUBBED
+        Content-Type:
+          - application/x-www-form-urlencoded
+      body: 'f.req=%5B%5B%5B%22izAoDd%22%2C%5B%5B%5Bnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5B%22https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3Dabc%22%5D%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%22text%2Fhtml%22%2C1%5D%5D%2C%22nb-1%22%2C%5B2%2Cnull%2Cnull%2C%5B1%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2Cnull%2C%5B1%5D%5D%5D%5D%5D%2Cnull%2Cnull%2Cnull%2C%221%22%5D%5D'
+    response:
+      code: 200
+      headers:
+        Content-Type:
+          - application/json
+      body: |
+        [["wrb.fr","izAoDd","[[[\"src-2\",\"YouTube Source\",[null,null,null,null,2,null,null,null],[null,2]]]]",null,null,null,"generic"]]
