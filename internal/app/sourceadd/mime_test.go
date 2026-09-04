@@ -22,8 +22,38 @@
 package sourceadd
 
 import (
+	"mime"
+	"path/filepath"
 	"testing"
 )
+
+// mdMIME returns whatever the running Go stdlib resolves
+// ".markdown" to. On platforms where the stdlib mime table
+// registers Markdown (most Linux distributions ship Go with the
+// upstream mime.types), this returns "text/markdown"; on
+// platforms where the table does not register it, the stdlib
+// returns "" and we fall back to the documented binary-blob
+// default. The test table mirrors this so the suite is
+// platform-portable without losing the "stdlib-driven" intent.
+//
+// The helper exists so a future Go release that changes the
+// table entry only needs to update this one spot, not every
+// test case.
+func mdMIME() string {
+	guess := mime.TypeByExtension(filepath.Ext("README.markdown"))
+	if guess == "" {
+		return "application/octet-stream"
+	}
+	// Trim "; charset=..." if present so the table mirrors the
+	// inferFileMIME implementation's bare-MIME contract.
+	for i := 0; i < len(guess); i++ {
+		if guess[i] == ';' {
+			guess = guess[:i]
+			break
+		}
+	}
+	return guess
+}
 
 // TestInferMIME_Kinds pins the per-Kind inference rule. The
 // table covers every Kind the classifier returns (URL, YouTube,
@@ -52,17 +82,27 @@ func TestInferMIME_Kinds(t *testing.T) {
 
 		// File branch — extension-driven. The stdlib
 		// mime.TypeByExtension table is the source of truth.
-		// Go's stdlib table does NOT recognize ".md" /
-		// ".markdown" (those resolve to "" — see Go issue
-		// #43401), so a Markdown file falls back to the
+		// The Markdown / .md mapping is intentionally NOT
+		// pinned here: Go's stdlib table registers
+		// ".md" / ".markdown" as `text/markdown` on some
+		// platforms but leaves them empty on others (the
+		// entry moved across Go releases). When the stdlib
+		// returns a non-empty value we pass it through; when
+		// it returns "" we fall back to the documented
 		// binary-blob default. A caller that needs the
-		// Markdown MIME passes it via SetMIMEOverride.
+		// Markdown MIME on a platform that does not register
+		// it passes it via SetMIMEOverride.
 		{"file_pdf", KindFile, "report.pdf", "application/pdf"},
 		{"file_pdf_path", KindFile, "/tmp/report.pdf", "application/pdf"},
 		{"file_pdf_relative", KindFile, "./report.pdf", "application/pdf"},
 		{"file_txt", KindFile, "notes.txt", "text/plain"},
-		{"file_md", KindFile, "README.md", "application/octet-stream"},
-		{"file_markdown", KindFile, "README.markdown", "application/octet-stream"},
+		// .md / .markdown — stdlib-table-driven. The expected
+		// value mirrors whatever Go's stdlib table returns on
+		// the running platform (text/markdown where registered,
+		// application/octet-stream elsewhere). See the table-
+		// driven mdMIME helper below.
+		{"file_md", KindFile, "README.md", mdMIME()},
+		{"file_markdown", KindFile, "README.markdown", mdMIME()},
 		{"file_json", KindFile, "data.json", "application/json"},
 		{"file_png", KindFile, "image.png", "image/png"},
 		{"file_html", KindFile, "page.html", "text/html"},
