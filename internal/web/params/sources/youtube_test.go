@@ -6,7 +6,7 @@
 // equivalent positional literal in Python. We assert the byte
 // output below as golden strings.
 //
-// The YouTube branch is the same 12-slot spec as the URL branch
+// The YouTube branch is the same 15-slot spec as the URL branch
 // but with the URL riding at slot 7 (not slot 2). The slot shift
 // is the URL / YouTube branch discriminator.
 package sources
@@ -19,8 +19,8 @@ import (
 
 // TestBuildAddSourceYouTube_Bytes — the golden encode test
 // pinned against Python's `add_youtube_source` literal. The
-// 14-slot spec carries the URL at slot 7, the MIME envelope at
-// slot 12, and the source-type code at slot 13. An empty mime
+// 15-slot spec carries the URL at slot 7, the MIME envelope at
+// slot 13, and the source-type code at slot 14. An empty mime
 // falls back to "text/html".
 func TestBuildAddSourceYouTube_Bytes(t *testing.T) {
 	got, err := params.Encode(func() []any { return BuildAddSourceYouTube("nb-1", "https://www.youtube.com/watch?v=abc", "") })
@@ -29,11 +29,11 @@ func TestBuildAddSourceYouTube_Bytes(t *testing.T) {
 	}
 	// Wire shape:
 	// [
-	//   [[null×7, ["https://..."], null×4, "text/html", 1]],
+	//   [[null×7, ["https://..."], null×5, "text/html", 1]],
 	//   "nb-1",
 	//   [2, null, null, [1, null×9, [1]]]
 	// ]
-	want := `[[[null,null,null,null,null,null,null,["https://www.youtube.com/watch?v=abc"],null,null,null,null,"text/html",1]],"nb-1",[2,null,null,[1,null,null,null,null,null,null,null,null,null,[1]]]]`
+	want := `[[[null,null,null,null,null,null,null,["https://www.youtube.com/watch?v=abc"],null,null,null,null,null,"text/html",1]],"nb-1",[2,null,null,[1,null,null,null,null,null,null,null,null,null,[1]]]]`
 	if string(got) != want {
 		t.Fatalf("BuildAddSourceYouTube bytes differ\n got: %s\nwant: %s", got, want)
 	}
@@ -47,28 +47,28 @@ func TestBuildAddSourceYouTube_ShortForm(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Encode: %v", err)
 	}
-	want := `[[[null,null,null,null,null,null,null,["https://youtu.be/abc"],null,null,null,null,"text/html",1]],"nb-1",[2,null,null,[1,null,null,null,null,null,null,null,null,null,[1]]]]`
+	want := `[[[null,null,null,null,null,null,null,["https://youtu.be/abc"],null,null,null,null,null,"text/html",1]],"nb-1",[2,null,null,[1,null,null,null,null,null,null,null,null,null,[1]]]]`
 	if string(got) != want {
 		t.Fatalf("BuildAddSourceYouTube short-form bytes differ\n got: %s\nwant: %s", got, want)
 	}
 }
 
 // TestBuildAddSourceYouTube_ExplicitMIME — a non-empty mime
-// replaces the default at slot 12.
+// replaces the default at slot 13.
 func TestBuildAddSourceYouTube_ExplicitMIME(t *testing.T) {
 	got, err := params.Encode(func() []any { return BuildAddSourceYouTube("nb-1", "https://youtu.be/abc", "application/json") })
 	if err != nil {
 		t.Fatalf("Encode: %v", err)
 	}
-	want := `[[[null,null,null,null,null,null,null,["https://youtu.be/abc"],null,null,null,null,"application/json",1]],"nb-1",[2,null,null,[1,null,null,null,null,null,null,null,null,null,[1]]]]`
+	want := `[[[null,null,null,null,null,null,null,["https://youtu.be/abc"],null,null,null,null,null,"application/json",1]],"nb-1",[2,null,null,[1,null,null,null,null,null,null,null,null,null,[1]]]]`
 	if string(got) != want {
 		t.Fatalf("BuildAddSourceYouTube explicit MIME bytes differ\n got: %s\nwant: %s", got, want)
 	}
 }
 
-// TestBuildAddSourceYouTube_Shape — the 14-slot spec
-// slot-by-slot inspection. Slot 7 carries [url]; slot 12 carries
-// the MIME; slot 13 is the source-type code.
+// TestBuildAddSourceYouTube_Shape — the 15-slot spec
+// slot-by-slot inspection. Slot 7 carries [url]; slot 13 carries
+// the MIME; slot 14 is the source-type code.
 func TestBuildAddSourceYouTube_Shape(t *testing.T) {
 	got := BuildAddSourceYouTube("nb-1", "https://youtu.be/abc", "application/pdf")
 	if len(got) != 3 {
@@ -82,23 +82,23 @@ func TestBuildAddSourceYouTube_Shape(t *testing.T) {
 		t.Fatalf("BuildAddSourceYouTube outer slot 0 = %v, want [[spec]]", got[0])
 	}
 	spec, ok := outer[0].([]any)
-	if !ok || len(spec) != 14 {
-		t.Fatalf("BuildAddSourceYouTube spec len = %d, want 14", len(spec))
+	if !ok || len(spec) != 15 {
+		t.Fatalf("BuildAddSourceYouTube spec len = %d, want 15", len(spec))
 	}
 	urlEnv, ok := spec[7].([]any)
 	if !ok || len(urlEnv) != 1 || urlEnv[0] != "https://youtu.be/abc" {
 		t.Errorf("BuildAddSourceYouTube spec slot 7 = %v, want [\"https://youtu.be/abc\"]", spec[7])
 	}
-	if spec[12] != "application/pdf" {
-		t.Errorf("BuildAddSourceYouTube spec slot 12 = %v, want \"application/pdf\"", spec[12])
+	if spec[13] != "application/pdf" {
+		t.Errorf("BuildAddSourceYouTube spec slot 13 = %v, want \"application/pdf\"", spec[13])
 	}
-	if spec[13] != 1 {
-		t.Errorf("BuildAddSourceYouTube spec slot 13 = %v, want 1", spec[13])
+	if spec[14] != 1 {
+		t.Errorf("BuildAddSourceYouTube spec slot 14 = %v, want 1", spec[14])
 	}
-	// Slots 0..6 and 8..11 must be null — these are the
+	// Slots 0..6 and 8..12 must be null — these are the
 	// discriminator-slot positions the URL / YouTube branches
 	// do not populate.
-	for _, i := range []int{0, 1, 2, 3, 4, 5, 6, 8, 9, 10, 11} {
+	for _, i := range []int{0, 1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12} {
 		if spec[i] != nil {
 			t.Errorf("BuildAddSourceYouTube spec slot %d = %v, want nil", i, spec[i])
 		}

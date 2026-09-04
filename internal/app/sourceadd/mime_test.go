@@ -52,7 +52,7 @@ func TestInferMIME_Kinds(t *testing.T) {
 
 		// File branch — extension-driven. The stdlib
 		// mime.TypeByExtension table is the source of truth.
-		// Go's stdlib table does NOT recognise ".md" /
+		// Go's stdlib table does NOT recognize ".md" /
 		// ".markdown" (those resolve to "" — see Go issue
 		// #43401), so a Markdown file falls back to the
 		// binary-blob default. A caller that needs the
@@ -98,7 +98,7 @@ func TestInferMIME_Kinds(t *testing.T) {
 }
 
 // TestInferMIMEWithOverride_OverrideWins pins the
-// override-wins behaviour. A non-empty override replaces the
+// override-wins behavior. A non-empty override replaces the
 // inferred value for every kind, including the ""-producing
 // kinds (Drive / Unknown) — a caller that needs a wire envelope
 // on a Drive source passes the override explicitly.

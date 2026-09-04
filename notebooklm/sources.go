@@ -27,8 +27,8 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/raihankhan/notebooklm-go/internal/app/sourceadd"
 	apperrors "github.com/raihankhan/notebooklm-go/internal/app/errors"
+	"github.com/raihankhan/notebooklm-go/internal/app/sourceadd"
 	"github.com/raihankhan/notebooklm-go/internal/web/features/sources"
 	sourcesparams "github.com/raihankhan/notebooklm-go/internal/web/params/sources"
 	"github.com/raihankhan/notebooklm-go/internal/web/rows"
@@ -208,7 +208,7 @@ func (a *SourcesAPI) AddURL(ctx context.Context, notebookID string, rawURL strin
 // override (via SetMIMEOverride) without forcing every other
 // caller to import the sourceadd package.
 //
-// Behaviour-wise AddURLWithAddOptions is identical to AddURL when
+// Behavior-wise AddURLWithAddOptions is identical to AddURL when
 // addOpts is nil or empty — the AddOption slice is purely an
 // extension seam.
 func (a *SourcesAPI) AddURLWithAddOptions(ctx context.Context, notebookID string, rawURL string, addOpts []sourceadd.AddOption, opts ...SourcesOption) (Source, error) {
@@ -352,7 +352,7 @@ func (a *SourcesAPI) AddYouTube(ctx context.Context, notebookID string, rawURL s
 // variadic so a CLI `--mime-type` flag on the YouTube source-add
 // path lands on the wire envelope slot 10.
 //
-// Behaviour is identical to AddYouTube when addOpts is nil or
+// Behavior is identical to AddYouTube when addOpts is nil or
 // empty.
 func (a *SourcesAPI) AddYouTubeWithAddOptions(ctx context.Context, notebookID string, rawURL string, addOpts []sourceadd.AddOption, opts ...SourcesOption) (Source, error) {
 	if a == nil || a.client == nil {

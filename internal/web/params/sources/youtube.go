@@ -12,12 +12,13 @@
 //	  build_template_block(),
 //	]
 //
-// — a 12-slot spec where the URL rides at slot 7 (the
-// YouTube-branch discriminator) and the trailing `1` is the
-// YouTube source-type code. The outer envelope is the same
-// nested wrapper `_web/sources/add.py` uses post the
-// Gemini-3.5 wire migration (#1546): a fresh template block
-// at slot 2, with the spec riding at slot 0.
+// — a 15-slot spec where the URL rides at slot 7 (the
+// YouTube-branch discriminator), the MIME rides at slot 13
+// (a Go-port extension; see Slot-MIME note below), and the
+// trailing `1` is the YouTube source-type code. The outer
+// envelope is the same nested wrapper `_web/sources/add.py`
+// uses post the Gemini-3.5 wire migration (#1546): a fresh
+// template block at slot 2, with the spec riding at slot 0.
 //
 // Per AGENTS.md rule 1 the Python source is normative. The spec
 // is mirrored position for position; the URL at slot 7 is the
@@ -84,11 +85,11 @@ func BuildAddSourceYouTube(notebookID, url, mime string) []any {
 	if mime == "" {
 		mime = defaultYouTubeMIME
 	}
-	// 14-slot spec: [null, null, null, null, null, null, null,
-	// [url], null, null, null, null, mime, 1]. Slot 7 carries the
-	// URL envelope; slot 12 carries the MIME; slot 13 is the
-	// source-type code.
-	spec := []any{nil, nil, nil, nil, nil, nil, nil, []any{url}, nil, nil, nil, nil, mime, 1}
+	// 15-slot spec: [null×7, [url], null×5, mime, 1]. Slot 7
+	// carries the URL envelope; slot 13 carries the MIME;
+	// slot 14 is the source-type code. The spec length matches
+	// the URL branch so the wire envelope shape is uniform.
+	spec := []any{nil, nil, nil, nil, nil, nil, nil, []any{url}, nil, nil, nil, nil, nil, mime, 1}
 	return []any{
 		[]any{spec},
 		notebookID,

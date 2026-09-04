@@ -148,7 +148,7 @@ func ValidateURL(u string) error {
 }
 
 // containsWhitespace reports whether s contains any ASCII
-// whitespace. Centralised here so the URL / YouTube branches
+// whitespace. Centralized here so the URL / YouTube branches
 // share the same rule.
 func containsWhitespace(s string) bool {
 	return strings.ContainsAny(s, " \t\r\n")
