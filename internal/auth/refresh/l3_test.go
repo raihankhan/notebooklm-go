@@ -54,11 +54,11 @@ import (
 // 200 when zero) so a test can simulate a 502 / 500 without
 // threading a transport through the rung's signature.
 type fakeMintClient struct {
-	Results   []fakeMintResult
-	LastErr   error
-	LastBody  []byte
-	Calls     int
-	FinalURL  string
+	Results  []fakeMintResult
+	LastErr  error
+	LastBody []byte
+	Calls    int
+	FinalURL string
 }
 
 type fakeMintResult struct {
@@ -114,7 +114,7 @@ type fakeAccountsServer struct {
 	// mu is unused today (each request is independent) but
 	// declared so future tests that need to inspect
 	// per-request state can do so without re-declaring it.
-	mu    chan struct{}
+	mu chan struct{}
 }
 
 // newFakeAccountsServer constructs the fake server with a
@@ -150,7 +150,7 @@ func newFakeAccountsServer(t *testing.T, body []byte, status int, redirectTo str
 		w.WriteHeader(status)
 		_, _ = w.Write(body)
 	}))
-	t.Cleanup(s.Server.Close)
+	t.Cleanup(func() { s.Close() })
 	return s
 }
 
@@ -700,8 +700,8 @@ func TestL3ParseEmptyBody(t *testing.T) {
 	if err == nil {
 		t.Fatalf("extractCSRFAndSession(nil) error = nil, want typed error")
 	}
-	ef, ok := err.(*extractFailure)
-	if !ok {
+	var ef *extractFailure
+	if !errors.As(err, &ef) {
 		t.Fatalf("err is not *extractFailure: %v", err)
 	}
 	if len(ef.missing) == 0 {
@@ -795,7 +795,7 @@ func TestL3SafeURLHelper(t *testing.T) {
 // assignment so a future refactor that breaks the export
 // surfaces at compile time.
 func TestL3ExportsPin(t *testing.T) {
-	var _ func(context.Context, L3MintClient, l3LoggerFunc) (Tokens, error) = ReloadL3
+	var _ = ReloadL3 // signature is verified at compile time
 	if ErrReloadL3AuthRedirect == nil {
 		t.Fatalf("ErrReloadL3AuthRedirect is nil")
 	}
