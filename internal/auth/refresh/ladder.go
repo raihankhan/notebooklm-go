@@ -28,6 +28,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"time"
 )
@@ -255,3 +256,181 @@ func (h URLHint) String() string {
 	}
 	return fmt.Sprintf("URLHint(host=%s authuser=%d email=%q)", host, h.AuthUser, h.AccountEmail)
 }
+
+// WiredLadder is the Sprint-3 (T-S3-001d) ladder implementation
+// that extends DefaultLadder with the L2.0, L2.5, and (when
+// provided) L3 / L4 reloaders. It exists as a sibling type rather
+// than a modification of DefaultLadder so the Phase-4 contract is
+// preserved unchanged for callers that only need L1. The
+// underlying L1 reload path is reused via the embedded
+// *DefaultLadder — when DefaultLadder.Step is called with L1, the
+// WiredLadder.Step method simply delegates, so the cookie-jar
+// seeding and in-band account identity surfacing done by ReloadL1
+// are identical between the two types.
+//
+// Dispatch table (T-S3-001d AC):
+//
+//   - L1   — delegate to DefaultLadder.Step (ReloadL1).
+//   - L2_0 — call ReloadL2_0(ctx, w.L2Storage, w.L2Logger).
+//     Returns ErrLadderLevelNotImplemented when w.L2Storage is
+//     nil so a caller that wires only L1+L2.5 keeps working.
+//   - L2_5 — call ReloadL2_5(ctx, w.L2_5Inline, w.L2_5Logger).
+//     The rung itself returns its typed sentinels
+//     (ErrReloadL2_5NotConfigured / ErrReloadL2_5NotMidSession)
+//     when the operator has not configured the env vars, so the
+//     dispatcher does not need to pre-check.
+//   - L3   — call w.L3Reload when set; otherwise return
+//     ErrLadderLevelNotImplemented. T-S3-001c will plug in
+//     ReloadL3 by assigning w.L3Reload = ReloadL3 after that
+//     ticket merges.
+//   - L4   — call w.L4Reload when set; otherwise return
+//     ErrLadderLevelNotImplemented. S02's mastertoken ticket will
+//     plug in via w.L4Reload when it merges.
+//
+// The boolean result follows the Ladder contract: true when the
+// rung fired and produced Tokens, false when the rung is not
+// applicable (sentinel, missing prerequisite, or surface not
+// wired yet). Errors that are not the ErrLadderLevelNotImplemented
+// sentinel — context.Canceled, ErrReloadL2_0Exhausted,
+// ErrReloadL2_5Exhausted, etc. — surface as (zero, false, err)
+// so the caller decides whether to escalate to the next rung or
+// surface the failure.
+type WiredLadder struct {
+	// DefaultLadder is the embedded L1 rung. Its Store, Jar,
+	// Name, and Now fields are required for the L1 path;
+	// anything left zero will surface a ReloadL1 typed error
+	// on the first L1 Step call.
+	*DefaultLadder
+
+	// L2Storage is the read surface ReloadL2_0 consumes. When
+	// nil, the L2.0 rung short-circuits to
+	// ErrLadderLevelNotImplemented — the dispatcher never
+	// invents a Storage from another field. Production wires a
+	// *DiskStorage pointed at the canonical storage_state.json
+	// path; tests inject a stub.
+	L2Storage Storage
+	// L2Logger is the *slog.Logger passed to ReloadL2_0. Nil
+	// falls back to slog.Default inside ReloadL2_0 (the rung
+	// itself handles a nil logger); WiredLadder.Step forwards
+	// nil unchanged.
+	L2Logger *slog.Logger
+
+	// L2_5Inline is the minimal inline-reader passed to
+	// ReloadL2_5. Optional: when nil, ReloadL2_5 still fires
+	// the configured command (the InlineStorage is a
+	// future-proofing seam, not a precondition).
+	L2_5Inline InlineStorage
+	// L2_5Logger is the function-shaped slog receiver passed
+	// to ReloadL2_5. Nil falls back to ReloadL2_5's
+	// built-in nopLogger; WiredLadder.Step forwards nil
+	// unchanged.
+	L2_5Logger loggerFunc
+
+	// L3Reload is the forward-compat hook for T-S3-001c (L3
+	// headless mint). When nil, Step returns
+	// ErrLadderLevelNotImplemented for L3. When set, Step
+	// calls w.L3Reload(ctx) and lifts the result into the
+	// (Tokens, true, nil) shape. The field is named "Reload"
+	// rather than "ReloadL3" so the l3.go implementation
+	// file (when it lands) is the only place that needs to
+	// own the symbol.
+	L3Reload func(ctx context.Context) (Tokens, error)
+	// L4Reload is the forward-compat hook for S02's L4
+	// master-token work. When nil, Step returns
+	// ErrLadderLevelNotImplemented for L4 — this is the ONLY
+	// rung whose default surface is the sentinel, per the
+	// T-S3-001d AC list.
+	L4Reload func(ctx context.Context) (Tokens, error)
+}
+
+// WithStorage wires the L2.0 Storage and L2.5 InlineStorage into
+// the ladder in a single call. It returns the receiver so
+// callers can chain construction with field assignments they
+// need to override individually:
+//
+//	wired := (&refresh.WiredLadder{DefaultLadder: &refresh.DefaultLadder{
+//	    Store: store, Jar: jar, Name: name,
+//	}}).WithStorage(l2disk, l2_5inline, l2_5logger)
+//
+// The L2.0 Storage is mandatory for L2.0 to fire — passing a
+// nil Storage leaves the L2.0 rung sentinel-stubbed (the AC
+// requires callers can opt-out of a rung without re-declaring
+// the dispatcher). The InlineStorage is optional; nil is valid
+// and matches the L2.5 rung's "no upstream state" contract.
+// l25Logger nil leaves the field zero (ReloadL2_5 falls back
+// to its internal nopLogger).
+func (w *WiredLadder) WithStorage(st Storage, inline InlineStorage, l25Logger loggerFunc) *WiredLadder {
+	w.L2Storage = st
+	w.L2_5Inline = inline
+	if l25Logger != nil {
+		w.L2_5Logger = l25Logger
+	}
+	return w
+}
+
+// Step is the WiredLadder Ladder implementation. See the
+// WiredLadder doc comment for the per-rung dispatch contract.
+//
+// Sentinel scope (T-S3-001d AC): ErrLadderLevelNotImplemented
+// returns ONLY from the L4 stub AND from a wired-but-not-yet-
+// implemented rung (L3 when L3Reload is nil; L2_0 when L2Storage
+// is nil — the latter so a partial wiring that omits the Storage
+// remains type-safe). The L1 / L2.0 / L2.5 paths return their
+// rung-specific typed errors (ErrReloadL2_0Exhausted /
+// ErrReloadL2_5Exhausted / ErrReloadL2_5NotConfigured / etc.) on
+// failure, NOT the sentinel — the sentinel is the "this rung
+// has not been wired yet" signal, not the "this rung tried and
+// failed" signal.
+func (w *WiredLadder) Step(ctx context.Context, level Level) (Tokens, bool, error) {
+	switch level {
+	case L1:
+		if w.DefaultLadder == nil {
+			return Tokens{}, false, fmt.Errorf("%w: %s", ErrLadderLevelNotImplemented, level)
+		}
+		return w.DefaultLadder.Step(ctx, L1)
+	case L2_0:
+		if w.L2Storage == nil {
+			return Tokens{}, false, fmt.Errorf("%w: %s", ErrLadderLevelNotImplemented, level)
+		}
+		t, err := ReloadL2_0(ctx, w.L2Storage, w.L2Logger)
+		if err != nil {
+			return Tokens{}, false, err
+		}
+		return t, true, nil
+	case L2_5:
+		t, err := ReloadL2_5(ctx, w.L2_5Inline, w.L2_5Logger)
+		if err != nil {
+			return Tokens{}, false, err
+		}
+		return t, true, nil
+	case L3:
+		if w.L3Reload == nil {
+			return Tokens{}, false, fmt.Errorf("%w: %s", ErrLadderLevelNotImplemented, level)
+		}
+		t, err := w.L3Reload(ctx)
+		if err != nil {
+			return Tokens{}, false, err
+		}
+		return t, true, nil
+	case L4:
+		// L4 is the ONLY rung whose default surface is the
+		// sentinel. S02's mastertoken ticket will plug in
+		// via w.L4Reload when it merges; until then every
+		// L4 Step call returns the sentinel.
+		if w.L4Reload == nil {
+			return Tokens{}, false, fmt.Errorf("%w: %s", ErrLadderLevelNotImplemented, level)
+		}
+		t, err := w.L4Reload(ctx)
+		if err != nil {
+			return Tokens{}, false, err
+		}
+		return t, true, nil
+	default:
+		return Tokens{}, false, fmt.Errorf("%w: %s", ErrLadderLevelNotImplemented, level)
+	}
+}
+
+// Compile-time check: WiredLadder satisfies the Ladder interface
+// the Phase-4 callers depend on. A future change that breaks
+// the signature trips this assertion before it breaks production.
+var _ Ladder = (*WiredLadder)(nil)
