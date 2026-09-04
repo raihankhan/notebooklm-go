@@ -30,6 +30,7 @@ import (
 	"fmt"
 
 	"github.com/raihankhan/notebooklm-go/internal/web/params"
+	sourcesparams "github.com/raihankhan/notebooklm-go/internal/web/params/sources"
 	"github.com/raihankhan/notebooklm-go/internal/web/rows"
 	"github.com/raihankhan/notebooklm-go/internal/web/wire"
 )
@@ -104,14 +105,69 @@ func List(ctx context.Context, c Caller, notebookID string) ([]rows.Source, erro
 // returns a null result on a successful add (the documented
 // "silent commit" failure mode — see
 // `_web/sources/add.py::SourceAddService.add_url`).
+//
+// This is the legacy 2-arg entry point (notebookID, url). The
+// T-S3-004b extension `AddURLWithMIME` accepts an explicit MIME
+// envelope so the wire envelope slot 10 carries a value the
+// caller chose (the CLI `--mime-type` flag). Existing callers
+// that pass through the SDK's `AddURL` (no MIME override) hit
+// this function unchanged — the default MIME is "text/html"
+// which the sourceadd package's InferMIME produces.
 func AddURL(ctx context.Context, c Caller, notebookID, url string) (rows.Source, error) {
+	return AddURLWithMIME(ctx, c, notebookID, url, "")
+}
+
+// AddURLWithMIME is the T-S3-004b extension of AddURL that takes
+// an explicit MIME envelope. The MIME rides at source-spec slot
+// 10 — see `sourcesparams.BuildAddSourceURL` for the positional
+// shape. An empty mime falls back to "text/html" (the URL
+// branch's canonical envelope).
+//
+// The function is the single seam the SDK uses for the URL
+// branch; the legacy AddURL delegates here so the wire shape
+// stays in one place.
+func AddURLWithMIME(ctx context.Context, c Caller, notebookID, url, mime string) (rows.Source, error) {
 	if c == nil {
 		return rows.Source{}, errors.New("features.sources.AddURL: caller is nil")
 	}
 	sourcePath := "/notebook/" + notebookID
-	raw, err := c.Call(ctx, wire.MethodAddSource, params.BuildAddSourceURL(notebookID, url), sourcePath, true)
+	raw, err := c.Call(ctx, wire.MethodAddSource, sourcesparams.BuildAddSourceURL(notebookID, url, mime), sourcePath, true)
 	if err != nil {
 		return rows.Source{}, fmt.Errorf("features.sources.AddURL: %w", err)
+	}
+	return decodeAddedSourceRow(raw)
+}
+
+// AddYouTube adds a YouTube URL source to a notebook and returns
+// the typed view of the freshly added source. The backing RPC is
+// `AddSources` (`izAoDd`) — see
+// `_web/sources/add.py::SourceAddService.add_youtube_source` for
+// the Python original.
+//
+// The wire shape is the same nested wrapper as `add_url_source`
+// (#1546 migration), but with the URL riding at source-spec slot
+// 7 (not slot 2). The slot shift is the URL / YouTube branch
+// discriminator: the backend reads the URL from whichever slot
+// the spec populates and dispatches the matching branch. The
+// trailing literal `1` is the source-type code (shared between
+// URL and YouTube — the source-type code is not the
+// discriminator, the spec slot is).
+//
+// `mime` is the MIME envelope the wire layer attaches; pass
+// `""` to use the default (`text/html`).
+//
+// allowNull is set to false for YouTube per the Python original
+// (`_web/sources/add.py::add_youtube_source`) — the backend
+// rejects a YouTube add that returns null, unlike the URL
+// branch which tolerates the silent-commit shape.
+func AddYouTube(ctx context.Context, c Caller, notebookID, url, mime string) (rows.Source, error) {
+	if c == nil {
+		return rows.Source{}, errors.New("features.sources.AddYouTube: caller is nil")
+	}
+	sourcePath := "/notebook/" + notebookID
+	raw, err := c.Call(ctx, wire.MethodAddSource, sourcesparams.BuildAddSourceYouTube(notebookID, url, mime), sourcePath, false)
+	if err != nil {
+		return rows.Source{}, fmt.Errorf("features.sources.AddYouTube: %w", err)
 	}
 	return decodeAddedSourceRow(raw)
 }

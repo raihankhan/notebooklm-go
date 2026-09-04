@@ -27,9 +27,10 @@ import (
 	"fmt"
 	"net/url"
 
+	"github.com/raihankhan/notebooklm-go/internal/app/sourceadd"
 	apperrors "github.com/raihankhan/notebooklm-go/internal/app/errors"
 	"github.com/raihankhan/notebooklm-go/internal/web/features/sources"
-	"github.com/raihankhan/notebooklm-go/internal/web/params"
+	sourcesparams "github.com/raihankhan/notebooklm-go/internal/web/params/sources"
 	"github.com/raihankhan/notebooklm-go/internal/web/rows"
 	"github.com/raihankhan/notebooklm-go/internal/web/wire"
 )
@@ -178,11 +179,59 @@ func (a *SourcesAPI) List(ctx context.Context, notebookID string, opts ...Source
 // surfaces as a typed *apperrors validation envelope rather than a
 // 5xx from the backend.
 //
-// `opts` is currently unused for AddURL (no wait / no title / no
-// batch parameters yet); the parameter is reserved so a future
-// ticket can add `WithWait(timeout)` and `WithTitle(name)` without
-// a signature break.
+// The signature accepts two variadic option slices:
+//
+//   - `SourcesOption` — the SDK-local options (WithSourcesMaxItems
+//     for List, etc.). Reserved for AddURL callers that need them
+//     in a future ticket; no SDK-local option currently applies
+//     to AddURL.
+//   - `sourceadd.AddOption` — the application-layer options,
+//     currently `SetMIMEOverride(string)`. The MIME envelope is
+//     forwarded into the wire spec at slot 10 so a CLI
+//     `--mime-type` flag lands on the envelope the backend reads.
+//
+// The two variadics are kept separate because the sourceadd
+// option belongs to the application-layer vocabulary (CLI
+// flag → MIME override), while SourcesOption belongs to the
+// SDK-local vocabulary (filtering, batch size, …). A future
+// ticket that wants to fold them can switch the signature to
+// `...Option` with a sealed interface, but until the option
+// sets grow the two-variadic seam keeps each call site
+// readable.
 func (a *SourcesAPI) AddURL(ctx context.Context, notebookID string, rawURL string, opts ...SourcesOption) (Source, error) {
+	return a.addURL(ctx, notebookID, rawURL, nil, opts...)
+}
+
+// AddURLWithAddOptions is the T-S3-004b extension of AddURL that
+// accepts the application-layer `sourceadd.AddOption` slice. The
+// two-sig split lets the CLI / MCP / REST adapter pass a MIME
+// override (via SetMIMEOverride) without forcing every other
+// caller to import the sourceadd package.
+//
+// Behaviour-wise AddURLWithAddOptions is identical to AddURL when
+// addOpts is nil or empty — the AddOption slice is purely an
+// extension seam.
+func (a *SourcesAPI) AddURLWithAddOptions(ctx context.Context, notebookID string, rawURL string, addOpts []sourceadd.AddOption, opts ...SourcesOption) (Source, error) {
+	return a.addURL(ctx, notebookID, rawURL, addOpts, opts...)
+}
+
+// addURL is the shared implementation behind AddURL +
+// AddURLWithAddOptions. The two-arg-split is internal so the
+// public API stays one-method-per-shape.
+//
+// The MIME inference rule: sourceadd.InferMIMEWithOverride
+// returns "text/html" for KindURL by default; the explicit
+// override (via SetMIMEOverride) replaces it. The wire builder
+// (`sourcesparams.BuildAddSourceURL`) reads the resolved MIME
+// into slot 10 of the spec.
+//
+// The URL is validated through sourcesparams.ValidateURL rather
+// than params.ValidateURL — both helpers share the same rule
+// (non-empty, non-whitespace, http-prefixed), but the sources
+// package's helper is the canonical seam for the T-S3-004b
+// surface. The two helpers stay in lockstep so a future
+// relaxation (e.g. percent-encoded spaces) lands in both.
+func (a *SourcesAPI) addURL(ctx context.Context, notebookID, rawURL string, addOpts []sourceadd.AddOption, opts ...SourcesOption) (Source, error) {
 	if a == nil || a.client == nil {
 		return Source{}, errors.New("notebooklm: SourcesAPI: nil client")
 	}
@@ -192,7 +241,7 @@ func (a *SourcesAPI) AddURL(ctx context.Context, notebookID string, rawURL strin
 	if err := validateNotebookIDStrict(notebookID); err != nil {
 		return Source{}, apperrors.Wrap(apperrors.CodeValidationError, err)
 	}
-	if err := params.ValidateURL(rawURL); err != nil {
+	if err := sourcesparams.ValidateURL(rawURL); err != nil {
 		// Wrap in the typed ValidationError envelope so adapters
 		// can branch on apperrors.Classify uniformly.
 		return Source{}, apperrors.Wrap(apperrors.CodeValidationError, err)
@@ -204,8 +253,17 @@ func (a *SourcesAPI) AddURL(ctx context.Context, notebookID string, rawURL strin
 		}
 		opt(&options)
 	}
+	var addOptions sourceadd.AddOptions
+	for _, opt := range addOpts {
+		if opt == nil {
+			continue
+		}
+		opt(&addOptions)
+	}
 
-	src, err := sources.AddURL(ctx, a.client.sourcesCaller(), notebookID, rawURL)
+	mime := sourceadd.InferMIMEWithOverride(sourceadd.KindURL, rawURL, addOptions.MIMEOverride)
+
+	src, err := sources.AddURLWithMIME(ctx, a.client.sourcesCaller(), notebookID, rawURL, mime)
 	if err != nil {
 		return Source{}, fmt.Errorf("notebooklm: SourcesAPI.AddURL: %w", err)
 	}
@@ -214,6 +272,122 @@ func (a *SourcesAPI) AddURL(ctx context.Context, notebookID string, rawURL strin
 	// is a typed alias of the row view); the conversion is a
 	// field-by-field copy so a future widening of the public
 	// surface does not silently change row semantics.
+	return Source{
+		ID:          src.ID,
+		Title:       src.Title,
+		Kind:        src.Kind,
+		StatusLabel: src.StatusLabel,
+	}, nil
+}
+
+// AddYouTube adds a YouTube URL or short-id source to a notebook
+// and returns the typed view of the freshly added source. The
+// backing RPC is `AddSources` (`izAoDd`) — see
+// `_web/sources/add.py::SourceAddService.add_youtube_source` for
+// the Python original.
+//
+// The URL is validated client-side before dispatch — a non-empty,
+// non-whitespace, `http`-prefixed string. The YouTube wire
+// envelope rides at source-spec slot 7 (vs. slot 2 for the URL
+// branch) — see `sourcesparams.BuildAddSourceYouTube`.
+//
+// The signature mirrors AddURL's two-variadic seam (SourcesOption
+// for SDK-local options, sourceadd.AddOption for application-
+// layer options like SetMIMEOverride). The two methods share the
+// MIME inference rule (InferMIMEWithOverride for KindYouTube
+// returns "text/html" by default).
+//
+// YouTube URLs come in two shapes the backend accepts:
+//
+//   - watch URLs: https://(www.|m.|music.)?youtube.com/watch?v=<id>
+//   - short URLs: https://youtu.be/<id>
+//
+// The wire envelope accepts both shapes — the backend's own
+// YouTube handler normalises the URL before ingest. The SDK
+// does no client-side extraction; a caller that has only the
+// video id (not a URL) should pass `https://youtu.be/<id>` so
+// the wire envelope is canonical.
+//
+// Per AGENTS.md rule 1 the wire shape mirrors the Python
+// `_web/sources/add.py::add_youtube_source` literal — a future
+// schema drift surfaces as a *wire.ShapeDriftError at the
+// features layer, not a silently-decoded URL.
+func (a *SourcesAPI) AddYouTube(ctx context.Context, notebookID string, rawURL string, opts ...SourcesOption) (Source, error) {
+	if a == nil || a.client == nil {
+		return Source{}, errors.New("notebooklm: SourcesAPI: nil client")
+	}
+	if err := ctx.Err(); err != nil {
+		return Source{}, err
+	}
+	if err := validateNotebookIDStrict(notebookID); err != nil {
+		return Source{}, apperrors.Wrap(apperrors.CodeValidationError, err)
+	}
+	if err := sourcesparams.ValidateYouTubeURL(rawURL); err != nil {
+		return Source{}, apperrors.Wrap(apperrors.CodeValidationError, err)
+	}
+	var options SourcesOptions
+	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		opt(&options)
+	}
+
+	mime := sourceadd.InferMIMEWithOverride(sourceadd.KindYouTube, rawURL, "")
+
+	src, err := sources.AddYouTube(ctx, a.client.sourcesCaller(), notebookID, rawURL, mime)
+	if err != nil {
+		return Source{}, fmt.Errorf("notebooklm: SourcesAPI.AddYouTube: %w", err)
+	}
+	return Source{
+		ID:          src.ID,
+		Title:       src.Title,
+		Kind:        src.Kind,
+		StatusLabel: src.StatusLabel,
+	}, nil
+}
+
+// AddYouTubeWithAddOptions is the AddURLWithAddOptions counterpart
+// for the YouTube branch. It carries the same `sourceadd.AddOption`
+// variadic so a CLI `--mime-type` flag on the YouTube source-add
+// path lands on the wire envelope slot 10.
+//
+// Behaviour is identical to AddYouTube when addOpts is nil or
+// empty.
+func (a *SourcesAPI) AddYouTubeWithAddOptions(ctx context.Context, notebookID string, rawURL string, addOpts []sourceadd.AddOption, opts ...SourcesOption) (Source, error) {
+	if a == nil || a.client == nil {
+		return Source{}, errors.New("notebooklm: SourcesAPI: nil client")
+	}
+	if err := ctx.Err(); err != nil {
+		return Source{}, err
+	}
+	if err := validateNotebookIDStrict(notebookID); err != nil {
+		return Source{}, apperrors.Wrap(apperrors.CodeValidationError, err)
+	}
+	if err := sourcesparams.ValidateYouTubeURL(rawURL); err != nil {
+		return Source{}, apperrors.Wrap(apperrors.CodeValidationError, err)
+	}
+	var options SourcesOptions
+	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		opt(&options)
+	}
+	var addOptions sourceadd.AddOptions
+	for _, opt := range addOpts {
+		if opt == nil {
+			continue
+		}
+		opt(&addOptions)
+	}
+
+	mime := sourceadd.InferMIMEWithOverride(sourceadd.KindYouTube, rawURL, addOptions.MIMEOverride)
+
+	src, err := sources.AddYouTube(ctx, a.client.sourcesCaller(), notebookID, rawURL, mime)
+	if err != nil {
+		return Source{}, fmt.Errorf("notebooklm: SourcesAPI.AddYouTube: %w", err)
+	}
 	return Source{
 		ID:          src.ID,
 		Title:       src.Title,
