@@ -27,7 +27,7 @@
 package sourceadd
 
 import (
-	"errors"
+	stderrors "errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -95,7 +95,7 @@ const (
 // branch on it with errors.Is; the wrapping happens at the call
 // site so the message can include the ambiguous argument for
 // log-time debugging.
-var ErrAmbiguousSource = errors.New("sourceadd: ambiguous source argument")
+var ErrAmbiguousSource = stderrors.New("sourceadd: ambiguous source argument")
 
 // Classification rules. Each constant is a short, single-purpose
 // fragment matched against the trimmed argument. Kept private so
@@ -110,11 +110,11 @@ const (
 	schemeHTTP  = "http"
 	schemeHTTPS = "https"
 
-	hostYouTubeWatch   = "youtube.com"
-	hostYouTubeWWW     = "www.youtube.com"
-	hostYouTubeShort   = "youtu.be"
-	hostDriveFile      = "drive.google.com"
-	hostDocsGoogle     = "docs.google.com"
+	hostYouTubeWatch = "youtube.com"
+	hostYouTubeWWW   = "www.youtube.com"
+	hostYouTubeShort = "youtu.be"
+	hostDriveFile    = "drive.google.com"
+	hostDocsGoogle   = "docs.google.com"
 
 	pathDriveFile  = "/file/"
 	pathDocsPrefix = "/document/"
@@ -188,7 +188,15 @@ func Classify(arg string) (Kind, error) {
 	if isPathShaped(trimmed) {
 		expanded, err := expandTilde(trimmed)
 		if err != nil {
-			return KindUnknown, fmt.Errorf("%w: %q: %v", ErrAmbiguousSource, trimmed, err)
+			// errors.Join composes two wrap targets so both
+			// the sentinel (ErrAmbiguousSource) and the
+			// underlying tilde-expansion error are
+			// matchable by errors.Is. This satisfies
+			// errorlint's "single %w" rule (a single
+			// Errorf call with both %w and %v is the
+			// pattern the linter rejects; errors.Join
+			// avoids the pattern entirely).
+			return KindUnknown, stderrors.Join(ErrAmbiguousSource, err)
 		}
 		if fileExists(expanded) {
 			return KindFile, nil
