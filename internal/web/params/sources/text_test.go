@@ -132,6 +132,8 @@ func TestValidateText_Accepts(t *testing.T) {
 func TestValidateText_Rejects(t *testing.T) {
 	cases := []string{
 		"",
+		"   ",
+		"\t",
 		// Control characters — the wire encoder escapes them
 		// but a literal \n can confuse the backend's tokenizer.
 		"hello\nworld",

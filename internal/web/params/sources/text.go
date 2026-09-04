@@ -122,23 +122,30 @@ func BuildAddSourceText(notebookID, title, content, mime string) []any {
 // ValidateText is the defensive pre-flight the text-source
 // builder shares with the URL / YouTube branches. The rule is
 // narrower than `ValidateURL` because inline text has no URL
-// shape to enforce; the only invariant is that the content is
-// non-empty and free of control characters the wire layer
-// would reject.
+// shape to enforce; the only invariant is that the content
+// is non-empty (after trimming), and free of control
+// characters the wire layer would reject.
+//
+// The trim check is intentionally narrow — a single-space
+// input is rejected as "no content", but "Hello world" is
+// accepted (the embedded space is part of the payload). The
+// caller is expected to pass raw text the user pasted;
+// rejecting all-whitespace input surfaces a typed error
+// rather than a backend 5xx.
 //
 // The control-character check matches the rule `params`
-// applies to share-builder email addresses (no whitespace, no
-// newlines) because the wire encoder escapes control
-// characters but a literal \n in a text source can confuse the
-// backend's text-tokenizer. The caller is expected to pass raw
-// text the user pasted; rejecting control characters up front
-// surfaces a typed error rather than a backend 5xx.
+// applies to share-builder email addresses (no newlines, no
+// tabs) because the wire encoder escapes control characters
+// but a literal \n in a text source can confuse the
+// backend's text-tokenizer. Embedded spaces are NOT control
+// characters; the rule only flags \r, \n, \t, and the
+// 0x00-0x1F / 0x7F control range.
 //
 // An empty title is allowed (the backend renders the content
 // itself); only the content is mandatory.
 func ValidateText(content string) error {
-	if content == "" {
-		return &paramError{Field: "content", Reason: "must not be empty"}
+	if strings.TrimSpace(content) == "" {
+		return &paramError{Field: "content", Reason: "must not be empty or whitespace"}
 	}
 	if containsControl(content) {
 		return &paramError{Field: "content", Reason: "must not contain control characters"}

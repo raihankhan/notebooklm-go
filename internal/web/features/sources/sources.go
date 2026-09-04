@@ -172,6 +172,121 @@ func AddYouTube(ctx context.Context, c Caller, notebookID, url, mime string) (ro
 	return decodeAddedSourceRow(raw)
 }
 
+// AddText adds an inline-text source to a notebook and returns
+// the typed view of the freshly added source. The backing RPC is
+// `AddSources` (`izAoDd`) — see
+// `_web/sources/add.py::SourceAddService.add_text_source` for the
+// Python original.
+//
+// The wire shape is the same nested wrapper as `add_url_source`
+// (#1546 migration), with the text-branch discriminator at
+// source-spec slot 1 (the [title, content] pair) and the type
+// marker `2` at source-spec slot 3 (the load-bearing branch
+// selector). `mime` is the wire envelope's MIME slot; pass `""`
+// to use the default (`text/plain`).
+//
+// allowNull is set to true for Text per the Python original
+// (`_web/sources/add.py::add_text_source`) — the backend
+// tolerates the silent-commit shape on text adds, unlike the
+// URL / YouTube branches.
+//
+// Text adds are intentionally non-idempotent: the wire envelope
+// does not carry a stable identifier (a text source is uniquely
+// identified only by its content bytes, not by an id the
+// backend emits in the response), so a caller that wants
+// dedupe must handle it externally — see docs/04-rpc-payloads.md
+// §"Sources" / "Operation variants for the idempotency registry".
+func AddText(ctx context.Context, c Caller, notebookID, title, content, mime string) (rows.Source, error) {
+	if c == nil {
+		return rows.Source{}, errors.New("features.sources.AddText: caller is nil")
+	}
+	sourcePath := "/notebook/" + notebookID
+	raw, err := c.Call(ctx, wire.MethodAddSource, sourcesparams.BuildAddSourceText(notebookID, title, content, mime), sourcePath, true)
+	if err != nil {
+		return rows.Source{}, fmt.Errorf("features.sources.AddText: %w", err)
+	}
+	return decodeAddedSourceRow(raw)
+}
+
+// AddFile adds a local-file source to a notebook and returns
+// the typed view of the freshly added source. The backing RPC
+// is `AddSourceFile` (`o4cbdc`) — see
+// `_web/sources/add.py::SourceAddService.register_file_source`
+// for the Python original.
+//
+// The wire shape is the 3-slot envelope `[[filename]],
+// notebook_id, TPL` — distinct from the URL / YouTube / Text /
+// Drive branches which use a 3-slot envelope with a source-spec
+// inner list. The File branch's spec is just the filename
+// wrapped in a single-element list (the wire envelope requires
+// the wrapping); the actual file bytes are NOT on the spec.
+// They stream via the Scotty upload protocol
+// (docs/04-rpc-payloads.md §"File upload — the Scotty resumable
+// protocol"); the MIME rides on the
+// `x-goog-upload-header-content-type` header in the upload phase
+// (T-S3-005a), not on the wire spec.
+//
+// For T-S3-004c the SDK calls only the `AddSourceFile` RPC to
+// register the source row; the upload phase is a follow-up
+// ticket. The `mime` parameter is reserved for that follow-up;
+// today it has no effect on the wire envelope (the spec is
+// filename-only). Pass `""` to use the default binary-blob
+// MIME during the upload phase.
+//
+// allowNull is set to true per the Python original — the
+// backend tolerates a silent-commit on file-register so a
+// caller that loses the response can re-list the notebook and
+// find the freshly-added source row.
+func AddFile(ctx context.Context, c Caller, notebookID, filename, mime string) (rows.Source, error) {
+	if c == nil {
+		return rows.Source{}, errors.New("features.sources.AddFile: caller is nil")
+	}
+	sourcePath := "/notebook/" + notebookID
+	raw, err := c.Call(ctx, wire.MethodAddSourceFile, sourcesparams.BuildAddSourceFile(notebookID, filename, mime), sourcePath, true)
+	if err != nil {
+		return rows.Source{}, fmt.Errorf("features.sources.AddFile: %w", err)
+	}
+	return decodeAddedSourceRow(raw)
+}
+
+// AddDrive adds a Google Drive source to a notebook and returns
+// the typed view of the freshly added source. The backing RPC
+// is `AddSources` (`izAoDd`) — see
+// `_web/sources/add.py::SourceAddService.add_drive_source` for
+// the Python original.
+//
+// The wire shape is the 4-element legacy tail envelope
+// `[[sourceSpec], notebook_id, [2], [1, null×8, [1]]]` — the
+// Drive branch has not been migrated to the Gemini-3.5 TPL
+// block (per the #1546 TODO in `_web/sources/add.py`). The
+// 11-slot spec carries the `[fileID, mimeType, 1, title]` quad
+// at slot 0 (the Drive-branch discriminator) and the
+// source-type code `1` at slot 10.
+//
+// `fileID` is the Drive file id (pre-extracted from the share
+// URL by the caller; the SDK does not parse the URL). `mimeType`
+// is the Drive MIME envelope (e.g.
+// `application/vnd.google-apps.document`); pass `""` to let
+// the backend re-derive from the Drive file's metadata.
+// `title` is the user-supplied display name (CLI `--title`
+// flag).
+//
+// allowNull is set to false per the Python original — the
+// backend rejects a Drive add that returns null, so the
+// features layer surfaces a wire-layer ErrEmptyResult rather
+// than degrading to a zero Source.
+func AddDrive(ctx context.Context, c Caller, notebookID, fileID, mimeType, title string) (rows.Source, error) {
+	if c == nil {
+		return rows.Source{}, errors.New("features.sources.AddDrive: caller is nil")
+	}
+	sourcePath := "/notebook/" + notebookID
+	raw, err := c.Call(ctx, wire.MethodAddSource, sourcesparams.BuildAddSourceDrive(notebookID, fileID, mimeType, title), sourcePath, false)
+	if err != nil {
+		return rows.Source{}, fmt.Errorf("features.sources.AddDrive: %w", err)
+	}
+	return decodeAddedSourceRow(raw)
+}
+
 // decodeSourceRows unwraps a GET_NOTEBOOK source-list envelope into
 // a slice of typed Source rows. The envelope shape is
 // `[[row1, row2, ...]]` (per `_web/sources/listing.py::list`); a
