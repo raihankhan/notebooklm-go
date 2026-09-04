@@ -154,6 +154,16 @@ func checkFilePath(arg string) error {
 	if err != nil {
 		return apperrors.Wrap(apperrors.CodeConfigError, fmt.Errorf("sourceadd: storage root: %w", err))
 	}
+	// Symlink-resolve the storage root too. On macOS the
+	// well-known macOS temp dir lives under /var which is a
+	// symlink to /private/var; if we resolved only the file
+	// path the two paths would lexically differ even when
+	// the file IS inside the storage root. EvalSymlinks
+	// returns the input verbatim on failure (e.g. nonexistent
+	// path) which is the desired fallback here.
+	if homeResolved, herr := filepath.EvalSymlinks(home); herr == nil {
+		home = homeResolved
+	}
 	if !isInsideDir(resolved, home) {
 		return nil
 	}
