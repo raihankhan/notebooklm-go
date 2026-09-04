@@ -43,7 +43,7 @@ func TestReqidCounter_StartsAtOne(t *testing.T) {
 }
 
 // TestReqidCounter_Value — the snapshot accessor returns the most
-// recent id without incrementing. The value is not synchronised with
+// recent id without incrementing. The value is not synchronized with
 // concurrent Increment calls; this test exercises only the single-
 // goroutine read path.
 func TestReqidCounter_Value(t *testing.T) {

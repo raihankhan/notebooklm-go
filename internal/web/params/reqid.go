@@ -61,7 +61,7 @@ func (c *ReqidCounter) Increment() int64 {
 }
 
 // Value returns a snapshot of the current counter value without
-// incrementing. The read is not synchronised with concurrent
+// incrementing. The read is not synchronized with concurrent
 // Increment calls — a caller that needs the post-increment value MUST
 // use Increment, which is the atomic read-modify-write. Value exists
 // for test assertions and diagnostic logging where a best-effort

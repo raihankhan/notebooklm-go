@@ -24,7 +24,7 @@
 //     slot 3 of the params array; the contract pinned by this builder
 //     is `[[source_ids], prompt, null, ChatStreamPersona(persona),
 //     conversation_id, null, null, notebook_id, 1]`. A new
-//     conversation is signalled by `conversationID == ""`.
+//     conversation is signaled by `conversationID == ""`.
 //
 // JSON encoding is delegated to wire.Marshal (AGENTS.md rule 3). The
 // golden-bytes test in chatstream_test.go pins the byte output.
@@ -112,15 +112,15 @@ func BuildChatStreamRequest(prompt, conversationID string, sourceIDs []string, p
 	sourcesArray := wire.NestSourceIDs(sourceIDs, 2)
 
 	params := []any{
-		sourcesArray,             // slot 0: source ids, nested depth 2
-		prompt,                   // slot 1: user prompt
-		nil,                      // slot 2: conversation history placeholder
-		ChatStreamPersona(persona), // slot 3: persona sub-array
-		conversationID,           // slot 4: conversation id ("" → new conversation)
-		nil,                      // slot 5: nil placeholder
-		nil,                      // slot 6: nil placeholder
+		sourcesArray,                    // slot 0: source ids, nested depth 2
+		prompt,                          // slot 1: user prompt
+		nil,                             // slot 2: conversation history placeholder
+		ChatStreamPersona(persona),      // slot 3: persona sub-array
+		conversationID,                  // slot 4: conversation id ("" → new conversation)
+		nil,                             // slot 5: nil placeholder
+		nil,                             // slot 6: nil placeholder
 		chatStreamNotebookIDPlaceholder, // slot 7: notebook id (transport replaces)
-		1,                        // slot 8: trailing literal
+		1,                               // slot 8: trailing literal
 	}
 
 	encoded, err := wire.Marshal(params)
