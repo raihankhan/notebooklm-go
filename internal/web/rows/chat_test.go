@@ -11,7 +11,6 @@
 package rows
 
 import (
-	"errors"
 	"strings"
 	"testing"
 
@@ -653,9 +652,6 @@ func TestDecodeChatHistory_ExtractIDError(t *testing.T) {
 	_, err := ExtractConversationID([]byte("garbage"))
 	if err == nil {
 		t.Errorf("ExtractConversationID: expected error on garbage input")
-	}
-	if !errors.Is(err, err) {
-		// sanity: at least we get a non-nil error.
 	}
 }
 

@@ -22,6 +22,7 @@
 package rows
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/raihankhan/notebooklm-go/internal/web/wire"
@@ -75,7 +76,7 @@ type Turn struct {
 	Author       string
 	Text         string
 	Citations    []string
-	CreatedAt    *float64 `json:",omitempty"`
+	CreatedAt    *float64   `json:",omitempty"`
 	RawCitations []Citation `json:",omitempty"`
 }
 
@@ -128,13 +129,9 @@ type Citation struct {
 //
 // The decoder is tolerant: a missing top-level slot degrades to an
 // empty Conversation rather than erroring out. A payload that cannot be
-// recognized as a chat-history response at all (no recognisable
+// recognized as a chat-history response at all (no recognizable
 // envelope) returns an error so callers can route it to the schema-
 // drift metric.
-//
-// `method` is the wire method name to embed in any ShapeDriftError
-// surfaced during decoding. Pass MethodGetConversationTurns (or its
-// string equivalent) from the call site.
 func DecodeChatHistory(body []byte) (*Conversation, error) {
 	payload, err := unmarshalChatPayload(body)
 	if err != nil {
@@ -161,7 +158,7 @@ func DecodeChatHistory(body []byte) (*Conversation, error) {
 			conv.Turns = turns
 			return conv, nil
 		}
-		// [3] is a list whose shape we did not recognise. Try the
+		// [3] is a list whose shape we did not recognize. Try the
 		// direct-history-envelope fallback below.
 	}
 
@@ -186,20 +183,27 @@ func DecodeChatHistory(body []byte) (*Conversation, error) {
 // convWithIDFromSlotB recovers a conversation when payload[3] carries
 // just the conversation id (the alt-wrap shape). It then walks payload[4]
 // for the history envelope and returns the assembled Conversation.
+//
+// The slot-3 id is authoritative for this shape: the envelope id at
+// slot-4[0] is informational (sometimes the server omits the inner
+// id, sometimes it echoes the outer one). When the inner envelope
+// has a different id we keep the slot-3 id, since the alt-wrap
+// shape's whole purpose is to surface the conversation id directly.
 func convWithIDFromSlotB(payload any, id string, conv *Conversation) (*Conversation, error) {
 	conv.ID = id
-	envelope, err := wire.List(payload, 4)
-	if err != nil {
-		// No envelope at [4] — id recovered, no turns. That is a
-		// valid shape when the SDK asked only for the id.
+	// The envelope at slot 4 is optional for this shape: when the SDK
+	// only asked for the id the server is allowed to omit the turns
+	// slot entirely. We try the slot directly rather than going through
+	// wire.List so the "slot absent" case is a typed nil-check, not an
+	// error swallowed silently.
+	rootList, ok := payload.([]any)
+	if !ok || len(rootList) <= 4 {
 		return conv, nil
 	}
-	if innerID, turns, ok := tryHistoryEnvelope(envelope); ok {
-		if innerID != "" {
-			conv.ID = innerID
+	if envelope, ok := rootList[4].([]any); ok {
+		if _, turns, ok := tryHistoryEnvelope(envelope); ok {
+			conv.Turns = turns
 		}
-		conv.Turns = turns
-		return conv, nil
 	}
 	return conv, nil
 }
@@ -215,7 +219,7 @@ func convWithIDFromSlotB(payload any, id string, conv *Conversation) (*Conversat
 // T-S3-007e's ChatAPI.GetConversationID calls it on the raw body
 // before the SDK has decided whether it needs the full turn list.
 //
-// An id that cannot be recovered (no recognisable id slot) returns an
+// An id that cannot be recovered (no recognizable id slot) returns an
 // error so the SDK can fail loudly rather than silently treating an
 // empty string as a fresh-conversation sentinel.
 func ExtractConversationID(body []byte) (string, error) {
@@ -244,35 +248,49 @@ func ExtractConversationID(body []byte) (string, error) {
 // tryHistoryEnvelope inspects v and, if it looks like a history
 // envelope ([id, [turn1, turn2, ...]]), returns the id plus the
 // decoded turns. Returns ("", nil, false) when v does not match.
+//
+// A genuine envelope has TWO positional slots:
+//
+//	list[0]    = conversation id (string)
+//	list[1]    = list of turns ([]any — may be empty)
+//
+// A list whose first two elements are both strings is rejected, since
+// the typical wrb.fr wrapper ["wrb.fr", rpc_id, ...] would otherwise
+// be mistaken for an envelope. The function ALSO accepts the rare
+// reversed shape [turns, id] but only when list[0] is a list of
+// turns (a further guard against false matches on the wrb.fr
+// wrapper).
 func tryHistoryEnvelope(v any) (string, []Turn, bool) {
 	list, ok := v.([]any)
 	if !ok || len(list) < 2 {
 		return "", nil, false
 	}
-	id, ok := list[0].(string)
-	if !ok || id == "" {
-		// Some payloads put the id at index 1 and the turns at index 0
-		// (a rare reversed shape the Python original tolerates).
-		if idAlt, okAlt := list[1].(string); okAlt && idAlt != "" {
-			if turnsList, okTurns := list[0].([]any); okTurns {
-				turns, err := decodeTurns(turnsList)
-				if err != nil {
-					return "", nil, false
-				}
-				return idAlt, turns, true
-			}
+	// Fast shape check: list[1] must be a list of turns for the
+	// standard shape. We require that to filter out the wrb.fr
+	// wrapper, whose list[1] is the rpc id (a string).
+	if id, ok := list[0].(string); ok && id != "" {
+		turnsList, ok := list[1].([]any)
+		if !ok {
+			return "", nil, false
 		}
-		return "", nil, false
+		turns, err := decodeTurns(turnsList)
+		if err != nil {
+			return id, nil, false
+		}
+		return id, turns, true
 	}
-	turnsList, ok := list[1].([]any)
-	if !ok {
-		return id, []Turn{}, true
+	// Reversed shape: [turns, id] — only when list[0] is a list of
+	// turns and list[1] is a string id.
+	if turnsList, ok := list[0].([]any); ok {
+		if idAlt, okAlt := list[1].(string); okAlt && idAlt != "" {
+			turns, err := decodeTurns(turnsList)
+			if err != nil {
+				return "", nil, false
+			}
+			return idAlt, turns, true
+		}
 	}
-	turns, err := decodeTurns(turnsList)
-	if err != nil {
-		return id, nil, false
-	}
-	return id, turns, true
+	return "", nil, false
 }
 
 // decodeTurns walks a list-of-turns slot and returns the typed slice.
@@ -282,7 +300,7 @@ func tryHistoryEnvelope(v any) (string, []Turn, bool) {
 //
 // A turn whose author is not a string or whose text slot is missing
 // is skipped (the Python original silently drops malformed turns).
-// An entirely-unrecognisable turns slot returns an error so the SDK
+// An entirely-unrecognizable turns slot returns an error so the SDK
 // can count the drift.
 func decodeTurns(list []any) ([]Turn, error) {
 	out := make([]Turn, 0, len(list))
@@ -446,8 +464,8 @@ func safeIndex(list []any, idx int) any {
 
 // asFloat coerces a json.Number / int / float64 to float64. Returns
 // false when v is not a numeric type. The wire format uses json.Number
-// for large integer ids; the citation offsets are small enough to fit
-// in float64 without loss.
+// for large integer ids (see wire.Unmarshal + UseNumber); the citation
+// offsets are small enough to fit in float64 without loss.
 func asFloat(v any) (float64, bool) {
 	switch n := v.(type) {
 	case float64:
@@ -456,6 +474,12 @@ func asFloat(v any) (float64, bool) {
 		return float64(n), true
 	case int64:
 		return float64(n), true
+	case json.Number:
+		f, err := n.Float64()
+		if err != nil {
+			return 0, false
+		}
+		return f, true
 	}
 	return 0, false
 }
