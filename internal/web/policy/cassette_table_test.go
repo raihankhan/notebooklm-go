@@ -55,13 +55,13 @@ var sourceAddKinds = []string{
 // T-S3-004's five source-add cassettes. Each subtest is the union of
 // the four AC checks:
 //
-//   1. Cassette file exists at the canonical path under cassetteDir.
-//   2. File is a well-formed cassette skeleton (interactions: list
-//      is present, contains at least one `- request:` entry).
-//   3. At least one interaction is recorded (the interaction count
-//      marker fires at least once).
-//   4. The on-disk bytes survive redact.Apply with zero substitutions
-//      (i.e. no credential pattern landed on disk).
+//  1. Cassette file exists at the canonical path under cassetteDir.
+//  2. File is a well-formed cassette skeleton (interactions: list
+//     is present, contains at least one `- request:` entry).
+//  3. At least one interaction is recorded (the interaction count
+//     marker fires at least once).
+//  4. The on-disk bytes survive redact.Apply with zero substitutions
+//     (i.e. no credential pattern landed on disk).
 //
 // Subtests that depend on T-S3-004c (text, file, drive) call t.Skip
 // when the cassette is missing so a green master is not held hostage
