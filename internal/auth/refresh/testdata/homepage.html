@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>NotebookLM</title>
+  <meta name="robots" content="noindex" />
+  <script nonce="fake-nonce">
+    // WIZ_global_data — the credential-bearing blob the L3 headless
+    // mint extracts from. Field names mirror the real NotebookLM app
+    // shell: SNlM0e (CSRF) and FdrFJe (session id). The values are
+    // deliberately fake (FAKE_ prefix) so a regression that leaks the
+    // fixture into a log line is detectable by simple substring
+    // matching.
+    var WIZ_global_data = {
+      "yIU9Ub": "bootstrap-marker",
+      "SNlM0e": "FAKE_L3_CSRF_TOKEN_AAA",
+      "FdrFJe": "FAKE_L3_SESSION_ID_BBB",
+      "qFwhqd": "ui-locale-en",
+      "u7YMfb": "render-mode",
+      "vXw7Kc": "config-snapshot"
+    };
+  </script>
+</head>
+<body>
+  <header>
+    <h1>Welcome back</h1>
+  </header>
+  <main>
+    <p>NotebookLM shell — fake-page fixture for L3 headless mint tests.</p>
+    <noscript>JavaScript is required.</noscript>
+  </main>
+</body>
+</html>
